@@ -5,11 +5,12 @@ metadata:
   namespace: agentgateway-system
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io	
+  # group/kind explicites : ce sont les valeurs par défaut, mais les écrire
+  # évite d'avoir à s'en souvenir. Pas de namespace (la Gateway est dans le même
+  # que la route) ni de sectionName (la route s'attache à tous les listeners).
+  - group: gateway.networking.k8s.io
     kind: Gateway
     name: ai
-    namespace: agentgateway-system
-    sectionName: http
   rules:
   - matches:
     - path:

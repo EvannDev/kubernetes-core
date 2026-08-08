@@ -24,7 +24,8 @@ jobs:
         set -euo pipefail
         for d in bootstrap projects \
                  base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
-                 clusters/*/platform clusters/*/external-secrets clusters/*/keycloak \
+                 clusters/*/platform clusters/*/cluster-dns \
+                 clusters/*/external-secrets clusters/*/keycloak \
                  clusters/*/platform-gateway clusters/*/agentgateway \
                  apps/*; do
           [ -f "$d/kustomization.yaml" ] || continue

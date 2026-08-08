@@ -134,6 +134,7 @@ L'ordre n'est pas cosmétique : c'est ce qui rend le bootstrap reproductible.
 |-----:|-----------|------------------------|
 | -20 | `gateway-api` | Propriétaire unique des CRD Gateway API. Ni Cilium ni AgentGateway ne les installent. |
 | -10 | `cilium` | Le cluster est `NotReady` avant. Fournit la GatewayClass `cilium`. |
+|  -8 | `cluster-dns` | Réécriture CoreDNS de l'issuer OIDC vers le Service interne de Keycloak. Doit précéder Argo CD. |
 |  -5 | `external-secrets` | Les CRD `ExternalSecret` doivent exister avant les composants qui en consomment. |
 |   0 | `external-secrets-config` | `ClusterSecretStore` + RBAC de lecture du coffre. |
 |   5 | `argocd` | Argo CD reprend la main sur lui-même. |
@@ -188,6 +189,10 @@ Ils sont documentés en commentaire à l'endroit exact où ils s'appliquent.
   indexe `TLSRoute` en `v1alpha2`, que le canal standard de v1.6 ne sert plus
   (`served: false`) — le `cilium-operator` plante alors au démarrage sur
   `no matches for kind "TLSRoute" in version "gateway.networking.k8s.io/v1alpha2"`.
+- **L'issuer OIDC doit résoudre depuis le navigateur ET depuis les pods.**
+  `keycloak.127.0.0.1.nip.io` pointe sur `127.0.0.1`, ce qui, dans le pod
+  `argocd-server`, désigne le pod lui-même : Argo CD s'interroge alors lui-même
+  et reçoit son propre 404 gzippé. D'où la réécriture CoreDNS (`cluster-dns`).
 
 Le détail des décisions d'architecture, et ce qui a été délibérément écarté, est
 dans [ARCHITECTURE.md](ARCHITECTURE.md).

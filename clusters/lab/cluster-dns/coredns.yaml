@@ -1,0 +1,78 @@
+# DNS à double horizon (split-horizon) pour l'issuer OIDC.
+#
+# LE PROBLÈME
+# -----------
+# L'issuer OIDC est une chaîne unique, utilisée par DEUX acteurs qui ne sont pas
+# sur le même réseau :
+#   - le NAVIGATEUR, sur le Mac, qui est redirigé vers Keycloak ;
+#   - ARGO CD SERVER, dans un pod, qui appelle le endpoint de découverte
+#     .well-known/openid-configuration en backchannel.
+#
+# Or `keycloak.127.0.0.1.nip.io` résout vers 127.0.0.1. Depuis le Mac c'est le
+# port publié par kind : parfait. Depuis le pod argocd-server, 127.0.0.1 c'est
+# LE POD LUI-MÊME. Argo CD s'interroge donc lui-même, et son serveur web répond
+# un 404 gzippé — d'où l'erreur illisible :
+#
+#   failed to query provider "http://keycloak.127.0.0.1.nip.io:8080/realms/platform":
+#   404 Not Found: <octets gzip>
+#
+# Ce n'est ni un problème de realm, ni de client, ni de PKCE.
+#
+# LA CORRECTION
+# -------------
+# On donne au cluster sa propre réponse DNS pour ce nom : le Service interne de
+# Keycloak. Le navigateur continue de passer par la Gateway, les pods coupent au
+# plus court. C'est exactement ce que fait un DNS interne en production.
+#
+# Le port tombe juste : kc-service écoute sur 8080, comme l'URL publique.
+# Et l'en-tête Host reste `keycloak.127.0.0.1.nip.io:8080`, ce qui correspond au
+# spec.hostname du CR Keycloak — le document de découverte annonce donc le bon
+# issuer, et Argo CD valide la correspondance.
+#
+# À NOTER : AgentGateway n'a PAS besoin de cette réécriture. Sa policy récupère
+# les JWKS via un backendRef vers le Service kc-service, sans jamais résoudre le
+# nom public. Il ne compare l'issuer que comme une chaîne de caractères. C'est
+# une bonne illustration de la différence entre « faire confiance à un émetteur »
+# et « aller lui parler ».
+#
+# CE FICHIER EST UNE COPIE CONFORME du Corefile généré par kubeadm/kind, avec
+# UNE seule ligne ajoutée (`rewrite`). Le reprendre en entier est le prix à payer
+# pour qu'Argo CD puisse le gérer : Argo remplace, il ne patche pas. Acceptable
+# sur un cluster de lab dont on est propriétaire ; sur un cluster managé, on
+# passerait par le point d'extension du fournisseur (par exemple le ConfigMap
+# coredns-custom sur AKS) plutôt que par le Corefile lui-même.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        # <<< AJOUT : résolution interne de l'issuer OIDC >>>
+        # CoreDNS restaure le nom d'origine dans la réponse, le client n'y voit
+        # que du feu. Le plugin `reload` déjà présent recharge ce fichier tout
+        # seul en une trentaine de secondes.
+        rewrite name keycloak.127.0.0.1.nip.io kc-service.keycloak.svc.cluster.local
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30 {
+           disable success cluster.local
+           disable denial cluster.local
+        }
+        loop
+        reload
+        loadbalance
+    }

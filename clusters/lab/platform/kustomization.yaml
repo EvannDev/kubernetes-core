@@ -17,6 +17,7 @@ namespace: argocd
 resources:
 - 00-gateway-api.yaml
 - 10-cilium.yaml
+- 15-cluster-dns.yaml
 - 20-external-secrets.yaml
 - 25-external-secrets-config.yaml
 - 30-argocd.yaml

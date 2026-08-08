@@ -23,6 +23,7 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	@set -e; \
 	for d in bootstrap projects clusters/$(CLUSTER)/platform \
 	         base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
+	         clusters/$(CLUSTER)/cluster-dns \
 	         clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
 	         clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
 	         apps/mcp-website-fetcher; do \

@@ -43,7 +43,7 @@ La règle appliquée dans ce dépôt :
 
   ```yaml
   sources:
-  - repoURL: quay.io/cilium/charts
+  - repoURL: https://helm.cilium.io
     chart: cilium
     targetRevision: 1.19.6
     helm:
@@ -189,6 +189,55 @@ faut un *client scope* dédié avec un `oidc-group-membership-mapper` et
 `full.path: "false"` — sinon le claim vaut `/platform-admins` et ne correspond
 plus à `policy.csv`. Le scope est déclaré dans
 `base/keycloak/realm-platform.yaml`.
+
+### 6.1 L'issuer est une seule chaîne pour deux réseaux
+
+Celle-là mérite une diapositive, parce que le message d'erreur ne dit
+absolument pas ce qui se passe :
+
+```
+failed to query provider "http://keycloak.127.0.0.1.nip.io:8080/realms/platform":
+404 Not Found: <octets gzip illisibles>
+```
+
+Un flux OIDC a **deux chemins réseau**, et l'issuer est la *même chaîne* pour
+les deux :
+
+| Acteur | Chemin | Résolution de `keycloak.127.0.0.1.nip.io` |
+|---|---|---|
+| Le navigateur, sur le Mac | frontchannel : redirection, login, retour | `127.0.0.1` → port publié par kind → Gateway → Keycloak ✔ |
+| Le pod `argocd-server` | backchannel : `.well-known/openid-configuration`, JWKS | `127.0.0.1` → **le pod lui-même** ✘
+
+Argo CD interroge donc son propre serveur web, qui répond un 404 gzippé — d'où
+la bouillie d'octets dans le message. Ce n'est ni le realm, ni le client, ni
+PKCE, ni la Gateway.
+
+C'est le problème classique du **DNS à double horizon**. En production il ne se
+pose pas : l'IdP a un nom DNS résolvable partout. En lab, on le reproduit avec
+une réécriture CoreDNS (`clusters/lab/cluster-dns/`) :
+
+```
+rewrite name keycloak.127.0.0.1.nip.io kc-service.keycloak.svc.cluster.local
+```
+
+Le navigateur continue de passer par la Gateway, les pods coupent au plus court
+vers le Service. Deux coups de chance qui rendent la manœuvre indolore :
+`kc-service` écoute sur 8080, comme l'URL publique ; et l'en-tête `Host` reste
+`keycloak.127.0.0.1.nip.io:8080`, donc le document de découverte annonce le bon
+`issuer` et Argo CD valide la correspondance.
+
+**Détail qui vaut le détour : AgentGateway n'est pas concerné.** Sa policy
+récupère les JWKS via un `backendRef` vers le Service `kc-service`, sans jamais
+résoudre le nom public, et ne compare l'`issuer` que comme une chaîne. La
+différence entre « faire confiance à un émetteur » et « aller lui parler » a des
+conséquences très concrètes sur la topologie réseau.
+
+Contrepartie assumée : cette `Application` prend possession du ConfigMap
+`coredns` créé par kubeadm — Argo CD remplace, il ne patche pas. C'est acceptable
+sur un cluster de lab dont on est propriétaire. Sur un cluster managé, on
+passerait par le point d'extension du fournisseur (par exemple le ConfigMap
+`coredns-custom` sur AKS) plutôt que par le Corefile lui-même. `prune: false`
+évite qu'une suppression de l'Application n'emporte le DNS du cluster.
 
 ## 7. Les secrets : ESO, et le coffre est remplaçable
 

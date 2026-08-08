@@ -1,0 +1,38 @@
+# Réécriture DNS interne de l'issuer OIDC (voir clusters/lab/cluster-dns/).
+#
+# Wave -8 : après Cilium (CoreDNS doit pouvoir démarrer), et bien avant Argo CD
+# (wave 5) qui en a besoin pour interroger Keycloak en backchannel.
+#
+# Cette Application prend possession du ConfigMap coredns, créé à l'origine par
+# kubeadm. C'est assumé sur un cluster de lab. prune est à false pour qu'une
+# suppression de l'Application ne fasse pas disparaître le DNS du cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: network
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/cluster-dns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
