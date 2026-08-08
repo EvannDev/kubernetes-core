@@ -48,6 +48,90 @@ spec:
         matchExpressions:
         - 'jwt.groups.exists(g, g == "platform-admins")'
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5.6-luna
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  # match.model omis : le nom de la ressource fait foi (ici "gpt-5.6-luna").
+  provider: OpenAI
+  policies:
+    # La clé d'API reste côté passerelle, projetée par External Secrets.
+    auth:
+      secretRef:
+        name: openai-secret
+    # « Authorization rules that clients must satisfy to use this model. »
+    # Même sémantique que partout ailleurs : les matchExpressions d'une règle
+    # sont en ET ; dès qu'une règle Allow existe, tout ce qui ne matche pas est
+    # refusé — ici avec un « Model authorization denied » explicite.
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - 'jwt.groups.exists(g, g == "platform-admins")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5.6-sol
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  # match.model omis : le nom de la ressource fait foi (ici "gpt-5.6-luna").
+  provider: OpenAI
+  policies:
+    # La clé d'API reste côté passerelle, projetée par External Secrets.
+    auth:
+      secretRef:
+        name: openai-secret
+    # « Authorization rules that clients must satisfy to use this model. »
+    # Même sémantique que partout ailleurs : les matchExpressions d'une règle
+    # sont en ET ; dès qu'une règle Allow existe, tout ce qui ne matche pas est
+    # refusé — ici avec un « Model authorization denied » explicite.
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - 'jwt.groups.exists(g, g == "platform-admins")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5.6-terra
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  # match.model omis : le nom de la ressource fait foi (ici "gpt-5.6-luna").
+  provider: OpenAI
+  policies:
+    # La clé d'API reste côté passerelle, projetée par External Secrets.
+    auth:
+      secretRef:
+        name: openai-secret
+    # « Authorization rules that clients must satisfy to use this model. »
+    # Même sémantique que partout ailleurs : les matchExpressions d'une règle
+    # sont en ET ; dès qu'une règle Allow existe, tout ce qui ne matche pas est
+    # refusé — ici avec un « Model authorization denied » explicite.
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - 'jwt.groups.exists(g, g == "platform-admins")'
+---
 # ── Modèle ouvert à tous les porteurs d'un token valide ──────────────────────
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
