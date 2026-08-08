@@ -27,7 +27,7 @@ resources:
 - 55-agentgateway.yaml
 - 60-agentgateway-config.yaml
 - 70-platform-gateway.yaml
-- 90-apps.yaml
+#- 90-apps.yaml
 
 labels:
 - includeSelectors: false
