@@ -38,3 +38,4 @@ spec:
       kind: Service
       name: hubble-ui
       port: 80
+      weight: 1
