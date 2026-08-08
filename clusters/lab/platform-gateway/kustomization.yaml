@@ -14,6 +14,15 @@ patches:
       path: /spec/hostnames/0
       value: argocd.127.0.0.1.nip.io
 
+- target:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: hubble
+  patch: |
+    - op: replace
+      path: /spec/hostnames/0
+      value: hubble.127.0.0.1.nip.io
+
 # Le listener passe de 80 à 8080 pour ce cluster.
 #
 # En mode host network (cf. clusters/lab/values/cilium.yaml), Envoy bind le port
