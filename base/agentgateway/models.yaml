@@ -27,8 +27,7 @@ metadata:
   namespace: agentgateway-system
 spec:
   match:
-    model:
-      name: "gpt-*"
+    model: "gpt-*"
   parentRefs:
   - group: gateway.networking.k8s.io
     kind: Gateway
