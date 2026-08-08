@@ -12,6 +12,7 @@ ARGOCD_CHART   ?= 10.3.0
 KC_HOST        ?= keycloak.127.0.0.1.nip.io:8080
 ARGOCD_HOST    ?= argocd.127.0.0.1.nip.io:8080
 HUBBLE_HOST    ?= hubble.127.0.0.1.nip.io:8080
+OWUI_HOST      ?= openwebui.127.0.0.1.nip.io:8080
 
 ##@ Général
 
@@ -27,6 +28,7 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	         clusters/$(CLUSTER)/cluster-dns \
 	         clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
 	         clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
+	         clusters/$(CLUSTER)/open-webui \
 	         apps/mcp-website-fetcher; do \
 	  printf '%-45s' "kustomize build $$d"; \
 	  kustomize build $$d > /dev/null && echo OK; \
@@ -37,6 +39,7 @@ KUSTOMIZE_DIRS := bootstrap projects \
   clusters/$(CLUSTER)/platform clusters/$(CLUSTER)/cluster-dns \
   clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
   clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
+  clusters/$(CLUSTER)/open-webui \
   apps/mcp-website-fetcher
 
 validate-crs: ## Valide les CR contre les CRD upstream : schéma ET règles CEL
@@ -92,6 +95,9 @@ seed-secrets: ## 4. Sème les secrets sources du "coffre" (hors GitOps, une seul
 	  --from-literal=username=keycloak \
 	  --from-literal=password=$$(openssl rand -hex 16) \
 	  --dry-run=client -o yaml | kubectl apply -f -
+	kubectl -n platform-secrets create secret generic open-webui-oidc \
+	  --from-literal=clientSecret=$$(openssl rand -hex 24) \
+	  --dry-run=client -o yaml | kubectl apply -f -
 	kubectl -n platform-secrets create secret generic llm-openai \
 	  --from-literal=apiKey="$${OPENAI_API_KEY:-sk-remplacer}" \
 	  --dry-run=client -o yaml | kubectl apply -f -
@@ -140,6 +146,7 @@ urls: ## Vérifie la Gateway de plateforme et affiche les URLs
 	@echo "   Argo CD  : http://$(ARGOCD_HOST)"
 	@echo "   Keycloak : http://$(KC_HOST)   (alice/alice, bob/bob)"
 	@echo "   Hubble   : http://$(HUBBLE_HOST)"
+	@echo "   Open WebUI : http://$(OWUI_HOST)"
 	@echo
 	@echo ">> Aucun port-forward n'est nécessaire ni possible ici : en mode host"
 	@echo "   network, Cilium ne crée pas de Service LoadBalancer, et son Service"

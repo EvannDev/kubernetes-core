@@ -46,13 +46,41 @@ spec:
             # Récupération des clés par le Service interne : indépendante du DNS
             # public et de la Gateway de plateforme.
             backendRef:
-              group: ''
               name: kc-service
               kind: Service
               namespace: keycloak
               port: 8080
             jwksPath: /realms/platform/protocol/openid-connect/certs
             cacheDuration: 5m
+
+      # ── OAuth MCP (RFC 9728) ────────────────────────────────────────────────
+      # Active les endpoints de découverte /.well-known/oauth-protected-resource
+      # et /.well-known/oauth-authorization-server sur la passerelle. Un client
+      # MCP (opencode, l'Inspector, Claude Desktop...) les interroge, découvre
+      # Keycloak tout seul, et lance un vrai flux OAuth avec PKCE.
+      #
+      # Vérifié dans le code (types/agent.rs, to_rfc_json) :
+      #  - `resource` et `authorization_servers` sont CALCULÉS par la passerelle
+      #    à partir de l'URI de la requête et de l'issuer. On ne les écrit pas :
+      #    c'est ce qui permet au port-forward de changer sans rien casser.
+      #  - les clés supplémentaires sont converties de camelCase en snake_case,
+      #    donc `scopesSupported` sort en `scopes_supported` conforme à la RFC.
+      #  - quand `mcp` est présent, les endpoints .well-known échappent à la
+      #    validation JWT (sinon la découverte serait impossible).
+      mcp:
+        provider: Keycloak
+        # Court-circuite l'enregistrement dynamique de client (RFC 7591) :
+        # la passerelle renvoie CET identifiant au lieu de relayer une demande
+        # d'enregistrement à Keycloak. On garde donc un client déclaré en Git,
+        # revu en pull request, plutôt qu'un client créé à la volée par un agent.
+        clientId: opencode
+        resourceMetadata:
+          scopesSupported:
+          - openid
+          - groups
+          - agentgateway-audience
+          bearerMethodsSupported:
+          - header
 ---
 # ── 2. AUTORISATION PAR OUTIL, sur le backend ────────────────────────────────
 # LA démo qui fait comprendre le sujet en dix secondes : l'autorisation ne porte

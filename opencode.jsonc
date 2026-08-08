@@ -1,0 +1,83 @@
+// Configuration opencode : TOUT passe par AgentGateway.
+//
+// C'est l'aboutissement de la démo. Un agent de code réel, sur le poste d'un
+// développeur, dont chaque appel LLM et chaque appel d'outil MCP traverse une
+// passerelle qui authentifie, autorise, plafonne et trace. L'agent ne détient
+// aucune clé de fournisseur : il détient une identité.
+//
+// Ce fichier est un config de PROJET (racine du dépôt), donc il l'emporte sur
+// le config global ~/.config/opencode/opencode.json. Il est fait pour être
+// commité : il ne contient aucun secret, seulement des références.
+//
+// Prérequis :
+//   make port-forward-ai        # expose la Gateway IA sur localhost:8081
+//   export AGW_TOKEN=$(make -s token)
+//   opencode mcp auth website-fetcher
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // ── LLM ────────────────────────────────────────────────────────────────────
+  // baseURL pointe sur la Gateway, pas sur api.openai.com. La clé OpenAI réelle
+  // vit dans un Secret projeté par External Secrets et référencé par
+  // l'AgentgatewayBackend : elle n'existe nulle part sur ce poste.
+  //
+  // Ce que l'agent envoie ici, c'est un JWT Keycloak. La policy `llm-governance`
+  // le valide (issuer, audience), vérifie l'appartenance au groupe
+  // platform-admins en CEL, et applique un quota. Un développeur retiré du
+  // groupe perd l'accès au LLM à son prochain token — sans qu'on touche à sa
+  // machine.
+  //
+  // @ai-sdk/openai-compatible cible /v1/chat/completions, qui correspond à la
+  // route "Completions" déclarée dans policies.ai.routes du backend.
+  "provider": {
+    "agentgateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "AgentGateway (LLM gouverné)",
+      "options": {
+        "baseURL": "http://localhost:8081/v1",
+        // Le SDK envoie apiKey en Authorization: Bearer <valeur>.
+        // C'est donc bien le JWT qui part, pas une clé de fournisseur.
+        "apiKey": "{env:AGW_TOKEN}"
+      },
+      "models": {
+        "gpt-4o-mini": {
+          "name": "gpt-4o-mini (via AgentGateway)",
+          "limit": { "context": 128000, "output": 16384 }
+        },
+        "gpt-4o": {
+          "name": "gpt-4o (via AgentGateway)",
+          "limit": { "context": 128000, "output": 16384 }
+        }
+      }
+    }
+  },
+
+  // ── MCP ────────────────────────────────────────────────────────────────────
+  // Aucun token en dur : opencode interroge
+  //   http://localhost:8081/.well-known/oauth-protected-resource
+  // que la passerelle sert d'elle-même (champs `resource` et
+  // `authorization_servers` calculés), y découvre Keycloak, puis déroule un
+  // flux OAuth avec PKCE dans le navigateur.
+  //
+  // opencode tente d'abord un enregistrement dynamique de client (RFC 7591).
+  // La passerelle le court-circuite et renvoie le clientId déclaré dans la
+  // policy — donc le client reste décrit dans Git et revu en pull request,
+  // au lieu d'être créé à la volée par un agent.
+  //
+  // Les jetons sont stockés dans ~/.local/share/opencode/mcp-auth.json et
+  // rafraîchis automatiquement : contrairement au LLM ci-dessus, rien n'expire
+  // en pleine démo.
+  "mcp": {
+    "website-fetcher": {
+      "type": "remote",
+      "url": "http://localhost:8081/mcp",
+      "enabled": true,
+      "oauth": {
+        "clientId": "opencode",
+        // groups              -> alimente jwt.groups, lu par le RBAC outil
+        // agentgateway-audience -> alimente aud=agentgateway, exigé par la policy
+        "scope": "openid groups agentgateway-audience"
+      }
+    }
+  }
+}

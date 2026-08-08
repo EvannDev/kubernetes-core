@@ -9,4 +9,5 @@ resources:
 - network.yaml
 - identity.yaml
 - gateway.yaml
+- ui.yaml
 - apps.yaml

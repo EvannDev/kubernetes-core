@@ -1,0 +1,60 @@
+# Valeurs Open WebUI COMMUNES.
+#
+# Tout ce qui contient une URL est propre au cluster :
+# clusters/<cluster>/values/open-webui.yaml.
+#
+# ATTENTION : `extraEnvVars` est une LISTE. Helm remplace les listes, il ne les
+# fusionne pas. Elle est donc déclarée UNIQUEMENT dans le fichier de valeurs du
+# cluster — la mettre ici aussi ferait disparaître silencieusement l'une des
+# deux moitiés.
+
+# On ne veut ni Ollama, ni Pipelines, ni Redis : le seul fournisseur de modèles
+# autorisé est la passerelle.
+ollama:
+  enabled: false
+pipelines:
+  enabled: false
+websocket:
+  enabled: false
+
+replicaCount: 1
+
+persistence:
+  enabled: true
+  size: 2Gi
+
+# Exposition par Gateway API (HTTPRoute), pas par Ingress.
+ingress:
+  enabled: false
+
+enableOpenaiApi: true
+
+sso:
+  enabled: true
+  # L'utilisateur est créé au premier login Keycloak. Sans ça, il faut créer les
+  # comptes à la main dans Open WebUI, ce qui vide le SSO de son intérêt.
+  enableSignup: true
+  # Recopie le claim `groups` dans les groupes Open WebUI : les groupes Keycloak
+  # deviennent le pilotage des droits de l'UI, comme pour Argo CD.
+  enableGroupManagement: true
+  groupManagement:
+    groupsClaim: groups
+  oidc:
+    enabled: true
+    clientId: open-webui
+    providerName: Keycloak
+    # Le secret vient d'un Secret existant, projeté par External Secrets.
+    clientExistingSecret: open-webui-oidc
+    clientExistingSecretKey: clientSecret
+    # LE détail à ne pas rater. Ces scopes déterminent le contenu du token que
+    # `auth_type: system_oauth` retransmettra ensuite à la passerelle :
+    #   groups                -> claim groups, lu par l'autorisation CEL
+    #   agentgateway-audience -> claim aud=agentgateway, exigé par la policy
+    scopes: "openid email profile groups agentgateway-audience"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 2Gi

@@ -1,0 +1,43 @@
+# Open WebUI — l'interface humaine gouvernée.
+#
+# Wave 35 : après Keycloak (15), qui doit avoir importé le client `open-webui`,
+# et après la passerelle IA (30), qui est son unique fournisseur de modèles.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: open-webui
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "35"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ui
+  sources:
+  - repoURL: https://helm.openwebui.com
+    chart: open-webui
+    targetRevision: 16.0.0
+    helm:
+      releaseName: open-webui
+      valueFiles:
+      - $values/base/open-webui/values.yaml
+      - $values/clusters/lab/values/open-webui.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: open-webui
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

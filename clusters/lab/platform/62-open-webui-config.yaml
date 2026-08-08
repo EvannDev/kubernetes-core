@@ -1,0 +1,35 @@
+# Namespace, ExternalSecret et HTTPRoute d'Open WebUI.
+#
+# Wave 34, donc AVANT le chart (35) : le Secret OIDC doit exister quand le pod
+# démarre, sinon il boucle en CreateContainerConfigError.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: open-webui-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "34"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ui
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/open-webui
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: open-webui
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

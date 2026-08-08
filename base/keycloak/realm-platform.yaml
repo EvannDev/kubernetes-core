@@ -15,12 +15,40 @@ metadata:
   namespace: keycloak
 spec:
   keycloakCRName: kc
+
+  # Injection de secrets dans l'import, sans jamais les écrire dans Git.
+  #
+  # Mécanisme réel, vérifié dans l'opérateur
+  # (KeycloakRealmImportJobDependentResource) : chaque entrée devient une
+  # VARIABLE D'ENVIRONNEMENT du Job d'import, alimentée par un Secret. Keycloak
+  # remplace ensuite les placeholders `${NOM}` dans le JSON du realm.
+  #
+  # Attention à la syntaxe : c'est bien `${NOM}` — et non `$(env:NOM)` que l'on
+  # lit souvent. Source : guide serveur « Using Environment Variables within the
+  # Realm Configuration Files ».
+  #
+  # Contrainte : le Secret doit être dans le MÊME namespace que le CR Keycloak.
+  # D'où l'ExternalSecret `open-webui-oidc` déployé ici, en plus de celui du
+  # namespace open-webui.
+  placeholders:
+    OPENWEBUI_CLIENT_SECRET:
+      secret:
+        name: open-webui-oidc
+        key: clientSecret
+
   realm:
     realm: platform
     displayName: Platform
     enabled: true
     sslRequired: none          # LAB uniquement : mettre "external" ailleurs.
     registrationAllowed: false
+
+    # LAB uniquement. Par défaut un access token vit 300 s, ce qui est sain mais
+    # pénible quand on colle un token dans une variable d'environnement pour la
+    # démo LLM. Le flux OAuth de MCP, lui, rafraîchit tout seul et n'a pas
+    # besoin de ça.
+    accessTokenLifespan: 3600
+    ssoSessionIdleTimeout: 28800
 
     # ═══ SANS CETTE LIGNE, RIEN NE MARCHE ═══════════════════════════════════
     # Déclarer `clientScopes` ci-dessous DÉSACTIVE la création des client
@@ -138,7 +166,79 @@ spec:
       - web-origins
       - groups
 
-    # [index 1] Client de démo pour AgentGateway : direct access grant, ce qui
+    # [index 1] Open WebUI — client CONFIDENTIEL.
+    #
+    # Contrairement à Argo CD et opencode, Open WebUI est un serveur : il peut
+    # garder un secret, et son implémentation OIDC en exige un. Le secret vient
+    # du coffre via le placeholder déclaré plus haut.
+    #
+    # LE POINT QUI COMPTE POUR LA DÉMO : le scope `agentgateway-audience`.
+    # Open WebUI ne fait pas d'OAuth « pour le provider » — il RETRANSMET le
+    # token de sa propre session SSO vers l'endpoint LLM (auth_type:
+    # system_oauth). Ce token est donc émis pour CE client, et son `aud` vaut ce
+    # que ce client demande. Sans ce scope, la passerelle le rejette avec un
+    # 401 parfaitement légitime et parfaitement incompréhensible.
+    - clientId: open-webui
+      name: Open WebUI
+      enabled: true
+      protocol: openid-connect
+      publicClient: false
+      clientAuthenticatorType: client-secret
+      secret: ${OPENWEBUI_CLIENT_SECRET}
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      # PLACEHOLDERS : surchargés par cluster.
+      rootUrl: http://openwebui.example.com
+      redirectUris:
+      - http://openwebui.example.com/oauth/oidc/callback
+      webOrigins:
+      - http://openwebui.example.com
+      defaultClientScopes:
+      - basic
+      - acr
+      - profile
+      - email
+      - roles
+      - web-origins
+      - groups
+      - agentgateway-audience
+
+    # [index 2] opencode — client OAuth d'un agent de code.
+    #
+    # C'est l'identifiant que la passerelle renvoie aux clients MCP qui tentent
+    # un enregistrement dynamique (voir mcp.clientId dans la policy). Public +
+    # PKCE : un agent qui tourne sur le poste d'un développeur ne peut pas
+    # garder un secret, exactement comme une SPA.
+    - clientId: opencode
+      name: opencode (agent de code)
+      enabled: true
+      protocol: openid-connect
+      publicClient: true
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      attributes:
+        pkce.code.challenge.method: S256
+      # LAB : opencode écoute sur un port de boucle locale choisi au moment du
+      # flux, et sa documentation ne le fige pas. Un joker évite de deviner.
+      # En production on épingle l'URI exacte — un redirect_uri trop large est
+      # une vraie faille (vol de code d'autorisation).
+      redirectUris:
+      - http://localhost/*
+      - http://127.0.0.1/*
+      webOrigins:
+      - http://localhost
+      - http://127.0.0.1
+      defaultClientScopes:
+      - basic
+      - acr
+      - profile
+      - email
+      - roles
+      - web-origins
+      - groups                 # alimente jwt.groups, lu par le RBAC outil
+      - agentgateway-audience  # alimente aud=agentgateway, exigé par la policy
+
+    # [index 3] Client de démo pour AgentGateway : direct access grant, ce qui
     # permet d'obtenir un token en une commande curl pendant la présentation.
     # A ne JAMAIS activer sur un vrai IdP.
     - clientId: mcp-client

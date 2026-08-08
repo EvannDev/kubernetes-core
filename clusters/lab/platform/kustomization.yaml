@@ -26,6 +26,8 @@ resources:
 - 50-agentgateway-crds.yaml
 - 55-agentgateway.yaml
 - 60-agentgateway-config.yaml
+- 62-open-webui-config.yaml
+- 65-open-webui.yaml
 - 70-platform-gateway.yaml
 - 90-apps.yaml
 

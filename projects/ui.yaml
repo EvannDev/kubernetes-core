@@ -1,0 +1,32 @@
+# ui : les interfaces humaines qui consomment la plateforme (Open WebUI
+# aujourd'hui, Grafana ou Hubble UI demain).
+#
+# Frontière volontaire : ces applications s'authentifient auprès de Keycloak et
+# consomment la passerelle IA, mais elles ne font partie ni de l'identité ni du
+# réseau. Leur donner leur propre projet, c'est pouvoir déléguer leur exploitation
+# sans donner accès au socle.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ui
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+spec:
+  description: Interfaces humaines (Open WebUI)
+
+  sourceRepos:
+  - https://github.com/EvannDev/kubernetes-core.git
+  - https://helm.openwebui.com
+
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: open-webui
+
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

@@ -50,3 +50,22 @@ patches:
       path: /spec/realm/clients/0/webOrigins
       value:
       - http://argocd.127.0.0.1.nip.io:8080
+
+# --- URLs de retour du client Open WebUI -------------------------------------
+# clients/1 = "open-webui" dans base/keycloak/realm-platform.yaml.
+- target:
+    group: k8s.keycloak.org
+    kind: KeycloakRealmImport
+    name: platform
+  patch: |
+    - op: replace
+      path: /spec/realm/clients/1/rootUrl
+      value: http://openwebui.127.0.0.1.nip.io:8080
+    - op: replace
+      path: /spec/realm/clients/1/redirectUris
+      value:
+      - http://openwebui.127.0.0.1.nip.io:8080/oauth/oidc/callback
+    - op: replace
+      path: /spec/realm/clients/1/webOrigins
+      value:
+      - http://openwebui.127.0.0.1.nip.io:8080

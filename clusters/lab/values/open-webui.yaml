@@ -1,0 +1,52 @@
+# Valeurs Open WebUI propres au cluster "lab".
+
+sso:
+  oidc:
+    # Open WebUI attend l'URL du document de découverte, pas l'issuer nu.
+    providerUrl: http://keycloak.127.0.0.1.nip.io:8080/realms/platform/.well-known/openid-configuration
+
+# Le SEUL fournisseur de modèles : la Gateway IA, par son Service interne.
+# Open WebUI tourne dans le cluster, il n'a donc rien à faire du port-forward.
+openaiBaseApiUrls:
+- http://ai.agentgateway-system.svc.cluster.local/v1
+
+# Liste unique (Helm remplace les listes, il ne les fusionne pas) : tout ce qui
+# passe par extraEnvVars est ici, et nulle part ailleurs.
+extraEnvVars:
+# ── Le cœur de la démonstration ──────────────────────────────────────────────
+# `auth_type: system_oauth` fait retransmettre par Open WebUI l'ACCESS TOKEN
+# OAuth de l'utilisateur connecté vers l'endpoint LLM, en Authorization: Bearer.
+# La passerelle voit donc l'identité réelle de la personne devant l'écran, pas
+# une clé de service partagée. C'est ce qui rend possible « alice a le droit,
+# bob non » sur un chat.
+#
+# Le réglage est PAR CONNEXION et n'a pas de variable d'environnement dédiée :
+# on passe par OPENAI_API_CONFIGS, un objet JSON indexé par URL (ou par index).
+# À noter : la variable ENABLE_FORWARD_OAUTH_TOKEN que l'on lit un peu partout
+# n'existe pas — la PR qui la proposait a été refusée au profit de ce mécanisme.
+- name: OPENAI_API_CONFIGS
+  value: |
+    {
+      "http://ai.agentgateway-system.svc.cluster.local/v1": {
+        "enable": true,
+        "name": "AgentGateway",
+        "auth_type": "system_oauth"
+      }
+    }
+
+# ── GitOps ───────────────────────────────────────────────────────────────────
+# Sans ça, Open WebUI ne lit les variables d'environnement qu'au PREMIER
+# démarrage puis les recopie en base : modifier ce fichier n'aurait plus aucun
+# effet, et la configuration réelle divergerait silencieusement de Git.
+# C'est exactement le genre d'état caché que le GitOps est censé éliminer.
+- name: ENABLE_PERSISTENT_CONFIG
+  value: "false"
+
+- name: WEBUI_URL
+  value: http://openwebui.127.0.0.1.nip.io:8080
+- name: OPENID_REDIRECT_URI
+  value: http://openwebui.127.0.0.1.nip.io:8080/oauth/oidc/callback
+
+# Pas de compte local : l'authentification passe forcément par Keycloak.
+- name: ENABLE_LOGIN_FORM
+  value: "false"

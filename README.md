@@ -68,6 +68,58 @@ make demo-mcp-anonymous     # sans token         -> refusé
 USER_NAME=bob USER_PASS=bob make demo-mcp   # autre identité, autres droits
 ```
 
+### Démo : un chat d'entreprise gouverné
+
+<http://openwebui.127.0.0.1.nip.io:8080> — Open WebUI, connecté à Keycloak en
+SSO, et dont **le seul fournisseur de modèles est la Gateway IA**.
+
+Ce qui rend la démo intéressante tient en un réglage : la connexion est en
+`auth_type: system_oauth`. Open WebUI **retransmet l'access token OAuth de
+l'utilisateur connecté** vers l'endpoint LLM. La passerelle voit donc l'identité
+réelle de la personne devant l'écran, pas une clé de service partagée — et
+`alice` obtient une réponse là où `bob` se fait refuser.
+
+Trois pièges désamorcés dans la configuration, tous invisibles sinon :
+
+- `ENABLE_FORWARD_OAUTH_TOKEN` **n'existe pas** ; la PR qui la proposait a été
+  refusée. Le vrai mécanisme est `auth_type` **par connexion**, réglable en
+  déclaratif via `OPENAI_API_CONFIGS` (objet JSON indexé par URL).
+- Le token transmis est émis pour le client OIDC **d'Open WebUI**. Sans le
+  client scope `agentgateway-audience`, son `aud` ne vaut pas `agentgateway` et
+  la passerelle le rejette — légitimement, et de façon parfaitement obscure.
+- `ENABLE_PERSISTENT_CONFIG=false`, sinon Open WebUI ne lit les variables
+  d'environnement qu'au premier démarrage puis les recopie en base : Git et le
+  cluster divergeraient en silence.
+
+### Démo : un agent de code réellement gouverné
+
+`opencode.jsonc` à la racine configure [opencode](https://opencode.ai) pour que
+**tout** passe par AgentGateway — les appels LLM comme les appels d'outils MCP.
+L'agent ne détient aucune clé de fournisseur : il détient une identité.
+
+```bash
+make port-forward-ai                 # Gateway IA sur localhost:8081
+export AGW_TOKEN=$(make -s token)    # JWT alice, pour la route LLM
+opencode mcp auth website-fetcher    # flux OAuth PKCE dans le navigateur
+opencode
+```
+
+Deux modes d'authentification, et c'est volontaire :
+
+- **MCP → OAuth complet.** opencode interroge
+  `/.well-known/oauth-protected-resource`, que la passerelle sert elle-même,
+  y découvre Keycloak et déroule un flux PKCE. Aucun secret sur le poste, et
+  les jetons se rafraîchissent tout seuls. L'enregistrement dynamique de client
+  (RFC 7591) est court-circuité par `mcp.clientId` : le client `opencode` reste
+  déclaré dans Git et revu en pull request.
+- **LLM → JWT en variable d'environnement.** Le SDK d'opencode n'a pas de flux
+  OAuth pour les providers ; il envoie `apiKey` en `Authorization: Bearer`. On
+  y met donc un JWT plutôt qu'une clé OpenAI.
+
+Ce qu'on montre sur scène : `alice` (groupe `platform-admins`) obtient une
+réponse ; `bob` se fait refuser l'outil MCP par une expression CEL versionnée ;
+et dans les deux cas la clé OpenAI n'a jamais quitté le cluster.
+
 Sans cluster sous la main, tout est vérifiable hors ligne :
 
 ```bash
