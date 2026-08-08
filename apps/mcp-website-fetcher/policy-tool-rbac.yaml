@@ -1,18 +1,74 @@
-# LA démo qui fait comprendre le sujet en dix secondes.
+# DEUX policies, et c'est imposé par l'API.
 #
-# L'autorisation ne porte pas sur "l'accès au serveur MCP" mais sur l'OUTIL
-# appelé. Deux utilisateurs, le même serveur, deux permissions différentes —
-# décidées par un JWT Keycloak et une expression CEL versionnée dans Git.
+# Le CRD AgentgatewayPolicy porte une règle CEL de validation :
 #
-# Variables CEL disponibles : jwt.sub, jwt.iss, n'importe quel claim (jwt.groups),
-# mcp.tool.name, source.address, request.path, request.host, request.headers[...],
-# response.code.
+#   rule:    has(self.traffic) && has(self.targetRefs)
+#              ? self.targetRefs.all(t, t.kind in
+#                  ['Gateway','HTTPRoute','GRPCRoute','ListenerSet','InferencePool'])
+#              : true
+#   message: the 'traffic' field can only target a Gateway, ListenerSet,
+#            GRPCRoute, HTTPRoute, or InferencePool
 #
-# Sémantique (vérifiée sur le schéma du CRD v1.4.1) : les matchExpressions d'une
-# même règle sont en ET. Pour un OU, on l'écrit en CEL avec ||.
+# Autrement dit : `traffic` (donc jwtAuthentication) s'attache à une ROUTE ou à
+# une GATEWAY, jamais à un AgentgatewayBackend. Et `backend.mcp` s'attache au
+# BACKEND. Ce n'est pas une lubie de schéma, c'est la chaîne de traitement :
+#
+#   requête -> [Gateway] -> [Route : authn, quota] -> [Backend : RBAC outil] -> serveur MCP
+#
+# L'authentification est une propriété du chemin d'entrée ; l'autorisation par
+# outil est une propriété de la cible. D'où deux objets.
+#
+# Autre règle CEL à connaître, qui interdit une autre combinaison tentante :
+#   traffic.jwtAuthentication may not be used with backend.mcp.authentication
+#   in the same policy
+---
+# ── 1. AUTHENTIFICATION, sur la route ────────────────────────────────────────
+# Aucune requête n'atteint le serveur MCP sans un JWT Keycloak valide.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-authn
+  namespace: mcp-demo
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
+        audiences:
+        - agentgateway
+        jwks:
+          remote:
+            # Récupération des clés par le Service interne : indépendante du DNS
+            # public et de la Gateway de plateforme.
+            backendRef:
+              name: kc-service
+              kind: Service
+              namespace: keycloak
+              port: 8080
+            jwksPath: /realms/platform/protocol/openid-connect/certs
+            cacheDuration: 5m
+---
+# ── 2. AUTORISATION PAR OUTIL, sur le backend ────────────────────────────────
+# LA démo qui fait comprendre le sujet en dix secondes : l'autorisation ne porte
+# pas sur « l'accès au serveur MCP » mais sur l'OUTIL appelé. Deux utilisateurs,
+# le même serveur, deux permissions — décidées par un JWT et une expression CEL
+# versionnée dans Git.
+#
+# Variables CEL : jwt.sub, jwt.iss, n'importe quel claim (jwt.groups),
+# mcp.tool.name, source.address, request.path, request.host,
+# request.headers[...], response.code.
+#
+# Les matchExpressions d'UNE règle sont en ET ; pour un OU, on l'écrit en CEL
+# avec ||. Plusieurs règles Allow (même policy ou policies différentes) sont
+# fusionnées et se comportent en OU.
 #
 # Note 1.4 : un refus en phase requête renvoie HTTP 200 avec un corps JSON-RPC
-# d'erreur (et non un code non-2xx).
+# d'erreur, et non un code non-2xx.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -23,26 +79,6 @@ spec:
   - group: agentgateway.dev
     kind: AgentgatewayBackend
     name: mcp-website-fetcher
-
-  # Authentification de la route MCP : même issuer que pour les LLM.
-  # (surchargé par cluster si besoin — ici on garde le même realm)
-  traffic:
-    jwtAuthentication:
-      mode: Strict
-      providers:
-      - issuer: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
-        audiences:
-        - agentgateway
-        jwks:
-          remote:
-            backendRef:
-              name: kc-service
-              kind: Service
-              namespace: keycloak
-              port: 8080
-            jwksPath: /realms/platform/protocol/openid-connect/certs
-            cacheDuration: 5m
-
   backend:
     mcp:
       authorization:

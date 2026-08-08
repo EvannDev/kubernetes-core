@@ -32,6 +32,17 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	  kustomize build $$d > /dev/null && echo OK; \
 	done
 
+KUSTOMIZE_DIRS := bootstrap projects \
+  base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
+  clusters/$(CLUSTER)/platform clusters/$(CLUSTER)/cluster-dns \
+  clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
+  clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
+  apps/mcp-website-fetcher
+
+validate-crs: ## Valide les CR contre les CRD upstream : schéma ET règles CEL
+	@pip install -q --disable-pip-version-check pyyaml jsonschema cel-python 2>/dev/null || true
+	python3 hack/validate-crs.py $(KUSTOMIZE_DIRS)
+
 waves: ## Affiche l'ordre de déploiement effectif de l'app-of-apps
 	@kustomize build clusters/$(CLUSTER)/platform | python3 -c "import sys,yaml; \
 rows=[(int(d['metadata'].get('annotations',{}).get('argocd.argoproj.io/sync-wave',0)), d['kind'], d['metadata']['name'], d['spec'].get('project','-')) \
@@ -166,7 +177,7 @@ demo-mcp-anonymous: ## Le même appel sans token : doit être refusé
 down: ## Supprime le cluster kind
 	kind delete cluster --name kind
 
-.PHONY: help validate waves kind-up install-gateway-api install-cilium \
+.PHONY: help validate validate-crs waves kind-up install-gateway-api install-cilium \
         install-argocd seed-secrets bootstrap up adopt-check \
         status urls port-forward-ai admin-password token demo-mcp \
         demo-mcp-anonymous down

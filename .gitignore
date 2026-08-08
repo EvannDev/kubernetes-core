@@ -4,4 +4,5 @@
 *.pem
 secrets.local.*
 .DS_Store
-_to_delete
+_to_delete/
+hack/.crd-cache/

@@ -34,6 +34,22 @@ jobs:
           echo "::endgroup::"
         done
 
+    # kubeconform ignore les CRD qu'il ne connaît pas, et ne sait de toute façon
+    # pas évaluer les règles CEL (x-kubernetes-validations). Or c'est là que se
+    # cachent les vrais invariants : « traffic ne peut cibler qu'une Gateway ou
+    # une Route », « backend.mcp ne peut pas cibler un Service »... Sans cette
+    # étape, l'erreur n'apparaît qu'au sync, dans le cluster.
+    - name: Valider les CR contre les CRD upstream (schéma + CEL)
+      run: |
+        pip install --quiet pyyaml jsonschema cel-python
+        python3 hack/validate-crs.py \
+          bootstrap projects \
+          base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
+          clusters/*/platform clusters/*/cluster-dns \
+          clusters/*/external-secrets clusters/*/keycloak \
+          clusters/*/platform-gateway clusters/*/agentgateway \
+          apps/*
+
     - name: Aucun Secret en clair dans Git
       run: |
         if git grep -nE '^kind:[[:space:]]*Secret$' -- '*.yaml' '*.yml'; then
