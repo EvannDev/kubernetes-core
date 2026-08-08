@@ -39,6 +39,36 @@ sso:
   enableGroupManagement: true
   groupManagement:
     groupsClaim: groups
+
+  # ── SANS CECI, SEUL LE PREMIER UTILISATEUR VOIT QUELQUE CHOSE ──────────────
+  # DEFAULT_USER_ROLE vaut `pending` par défaut dans Open WebUI, et un compte
+  # `pending` ne voit AUCUN modèle. Le tout premier utilisateur à se connecter
+  # est promu admin automatiquement (bootstrap first-user) — tous les suivants
+  # restent en attente de validation manuelle.
+  #
+  # Symptôme trompeur : alice (première connectée) voit tout, bob ne voit rien,
+  # et on accuse la passerelle alors qu'elle renvoie correctement sa liste
+  # filtrée. Le filtrage par groupe fonctionnait ; c'est l'UI qui n'affichait
+  # rien à un compte non activé.
+  #
+  # La gestion des rôles par OIDC supprime le problème ET la validation
+  # manuelle : les groupes Keycloak pilotent le rôle Open WebUI, et le rôle est
+  # réévalué À CHAQUE connexion (update_user_role_by_id), donc un utilisateur
+  # existant est corrigé sans intervention.
+  #
+  # Une seule source de vérité pour l'identité : Keycloak.
+  enableRoleManagement: true
+  roleManagement:
+    # On réutilise le claim `groups` comme claim de rôles : un seul mapper
+    # Keycloak sert à la fois l'autorisation des modèles, celle d'Argo CD et
+    # les rôles de l'UI.
+    rolesClaim: groups
+    # Qui a le droit de se connecter (rôle Open WebUI `user`).
+    # Quelqu'un qui n'est dans aucun de ces groupes retombe sur `pending` :
+    # défaut sûr, et volontairement conservé.
+    allowedRoles: "platform-admins,platform-viewers"
+    # Qui devient administrateur d'Open WebUI.
+    adminRoles: "platform-admins"
   oidc:
     enabled: true
     clientId: open-webui
