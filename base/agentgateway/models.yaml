@@ -23,11 +23,11 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
-  name: gpt-family
+  name: openai-models
   namespace: agentgateway-system
 spec:
   match:
-    model: "gpt-*"
+    model: "openai/*"
   parentRefs:
   - group: gateway.networking.k8s.io
     kind: Gateway
@@ -36,6 +36,9 @@ spec:
   # match.model omis : le nom de la ressource fait foi (ici "gpt-4o").
   provider: OpenAI
   policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("openai/")'
     # La clé d'API reste côté passerelle, projetée par External Secrets.
     auth:
       secretRef:
