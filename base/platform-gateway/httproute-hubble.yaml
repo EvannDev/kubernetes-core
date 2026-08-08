@@ -23,5 +23,5 @@ spec:
     - group: ''	
       kind: Service
       name: hubble-ui
-      port: 80
+      port: 8081
       weight: 1
