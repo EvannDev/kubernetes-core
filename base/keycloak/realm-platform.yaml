@@ -22,6 +22,38 @@ spec:
     sslRequired: none          # LAB uniquement : mettre "external" ailleurs.
     registrationAllowed: false
 
+    # ═══ SANS CETTE LIGNE, RIEN NE MARCHE ═══════════════════════════════════
+    # Déclarer `clientScopes` ci-dessous DÉSACTIVE la création des client
+    # scopes intégrés de Keycloak (profile, email, roles, web-origins, acr,
+    # basic, address, phone, microprofile-jwt).
+    #
+    # RealmManager.java (26.7.1) :
+    #
+    #   private boolean isCreateDefaultClientScopes(RealmRepresentation rep) {
+    #       Map<String, String> attributes = rep.getAttributesOrEmpty();
+    #       String createDefaultClientScopes = attributes.remove(CREATE_DEFAULT_CLIENT_SCOPES);
+    #       return rep.getClientScopes() == null || Boolean.parseBoolean(createDefaultClientScopes);
+    #   }
+    #
+    #   if (isCreateDefaultClientScopes(rep)) { createDefaultClientScopes(realm); }
+    #   RepresentationToModel.importRealm(session, rep, realm, userImport);
+    #
+    # C'est du tout ou rien : soit on ne déclare aucun scope et on hérite des
+    # intégrés, soit on en déclare un seul et on perd TOUS les intégrés.
+    # L'attribut ci-dessous est l'échappatoire officielle — il rétablit la
+    # création des intégrés AVANT l'import des nôtres, donc sans conflit.
+    # Il est consommé (`remove`) et n'est pas persisté comme attribut du realm.
+    #
+    # Symptôme si on l'oublie : Keycloak répond
+    #   invalid_scope: Invalid scopes: openid profile email groups
+    # parce que `profile` et `email` n'existent tout simplement pas. Le
+    # document de découverte le trahit :
+    #   "scopes_supported":["openid","agentgateway-audience","offline_access","groups"]
+    # (offline_access survit car il est créé par un chemin distinct,
+    #  setupOfflineTokens, indépendant de ce test.)
+    attributes:
+      CreateDefaultClientScopes: "true"
+
     # --- Groupes : la seule source d'autorisation -----------------------------
     # Repris tels quels dans le claim "groups" et donc dans policy.csv d'Argo CD
     # et dans les expressions CEL d'AgentGateway.
@@ -89,11 +121,21 @@ spec:
       - http://argocd.example.com/pkce/verify
       webOrigins:
       - http://argocd.example.com
+      # Déclarer defaultClientScopes REMPLACE la liste par défaut du client :
+      # tout ce qui n'est pas listé ici est retiré. Il faut donc réénumérer les
+      # intégrés dont on a besoin, et pas seulement ajouter "groups".
+      #
+      # "openid" n'est PAS un client scope : c'est le scope protocolaire OIDC,
+      # toujours implicite. Le mettre ici ne produit qu'un avertissement
+      # "Referenced client scope doesn't exist" à l'import. On le demande
+      # côté Argo CD (requestedScopes), pas ici.
       defaultClientScopes:
-      - openid
+      - basic          # claims sub et auth_time
+      - acr
       - profile
       - email
       - roles
+      - web-origins
       - groups
 
     # [index 1] Client de démo pour AgentGateway : direct access grant, ce qui
@@ -107,10 +149,12 @@ spec:
       standardFlowEnabled: false
       directAccessGrantsEnabled: true
       defaultClientScopes:
-      - openid
+      - basic
+      - acr
       - profile
       - email
       - roles
+      - web-origins
       - groups
       - agentgateway-audience
 

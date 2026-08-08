@@ -11,6 +11,7 @@ CILIUM_CHART   ?= 1.19.6
 ARGOCD_CHART   ?= 10.3.0
 KC_HOST        ?= keycloak.127.0.0.1.nip.io:8080
 ARGOCD_HOST    ?= argocd.127.0.0.1.nip.io:8080
+HUBBLE_HOST    ?= hubble.127.0.0.1.nip.io:8080
 
 ##@ Général
 
@@ -127,6 +128,7 @@ urls: ## Vérifie la Gateway de plateforme et affiche les URLs
 	@echo
 	@echo "   Argo CD  : http://$(ARGOCD_HOST)"
 	@echo "   Keycloak : http://$(KC_HOST)   (alice/alice, bob/bob)"
+	@echo "   Hubble   : http://$(HUBBLE_HOST)"
 	@echo
 	@echo ">> Aucun port-forward n'est nécessaire ni possible ici : en mode host"
 	@echo "   network, Cilium ne crée pas de Service LoadBalancer, et son Service"
