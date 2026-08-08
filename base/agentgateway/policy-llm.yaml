@@ -1,41 +1,40 @@
-# LE manifeste de gouvernance. Trois choses en un seul objet déclaratif,
-# versionné, revu en pull request :
+# AUTHENTIFICATION À LA PORTE, autorisation au plus près de la ressource.
 #
-#  1. authentification — aucun appel LLM sans JWT Keycloak valide ;
-#  2. autorisation     — expression CEL sur les claims du token ;
-#  3. quota            — plafond de débit par la passerelle, pas par l'agent.
+# Cette policy s'attache à la GATEWAY et non à une route : depuis le passage au
+# catalogue AgentgatewayModel, il n'y a plus de HTTPRoute pour le trafic LLM —
+# les modèles s'attachent directement au listener. Une policy de gateway couvre
+# donc tout ce qui entre : LLM et MCP.
 #
-# C'est exactement ce que l'on ne peut PAS faire quand chaque application porte
-# sa propre clé OpenAI dans un Secret.
+# Répartition des responsabilités qui en découle, et c'est la bonne :
+#   ici                    -> QUI es-tu (JWT) et à quel débit
+#   AgentgatewayModel      -> as-tu le droit d'utiliser CE modèle
+#   AgentgatewayPolicy MCP -> as-tu le droit d'appeler CET outil
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: llm-governance
+  name: ai-authn
   namespace: agentgateway-system
 spec:
   targetRefs:
   - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: llm
+    kind: Gateway
+    name: ai
+    sectionName: http
 
   traffic:
     jwtAuthentication:
-      # Strict = un JWT valide est obligatoire.
-      # Optional = validé s'il est présent ; Permissive = ne rejette jamais.
       mode: Strict
       providers:
-      # PLACEHOLDER : l'issuer est surchargé par cluster
-      # (clusters/<cluster>/agentgateway). Il doit correspondre au claim "iss"
-      # au caractère près.
+      # PLACEHOLDER : l'issuer est surchargé par cluster. Il doit correspondre
+      # au claim "iss" au caractère près.
       - issuer: http://keycloak.example.com/realms/platform
         audiences:
         - agentgateway
         jwks:
           remote:
-            # La récupération des clés se fait par le Service interne : elle ne
-            # dépend donc pas de la Gateway de plateforme ni du DNS externe.
+            # Par le Service interne : indépendant du DNS public et de la
+            # Gateway de plateforme.
             backendRef:
-              group: ''
               name: kc-service
               kind: Service
               namespace: keycloak
@@ -43,27 +42,32 @@ spec:
             jwksPath: /realms/platform/protocol/openid-connect/certs
             cacheDuration: 5m
 
-    # Autorisation par claim : seuls les membres du groupe platform-admins
-    # peuvent consommer des tokens LLM.
-    #
-    # ATTENTION à la sémantique, vérifiée sur le schéma du CRD v1.4.1 :
-    #  - les matchExpressions d'UNE règle sont en ET (toutes doivent être vraies) ;
-    #  - plusieurs règles Allow, dans la même policy ou dans des policies
-    #    différentes, sont fusionnées et se comportent en OU ;
-    #  - dès qu'une règle Allow existe, tout ce qui ne matche pas est refusé.
-    # Pour un OU à l'intérieur d'une règle, utiliser || dans l'expression CEL.
-    #
-    # Le bloc "authorization" est un frère de jwtAuthentication sous "traffic",
-    # et non un champ du provider JWT.
-    authorization:
-      action: Allow
-      policy:
-        matchExpressions:
-        - 'jwt.groups.exists(g, g == "platform-admins")'
+      # Découverte OAuth MCP (RFC 9728), désormais au niveau Gateway.
+      #
+      # Indispensable ici : quand le bloc `mcp` est présent, les endpoints
+      # /.well-known/* échappent à la validation JWT (vérifié dans
+      # JwtAuthentication::apply). Sans lui, une policy Strict sur la Gateway
+      # rendrait la découverte impossible — il faudrait un token pour apprendre
+      # comment en obtenir un.
+      #
+      # `resource` et `authorization_servers` sont calculés par la passerelle ;
+      # les clés supplémentaires passent de camelCase à snake_case.
+      mcp:
+        provider: Keycloak
+        # Court-circuite l'enregistrement dynamique de client : un agent ne peut
+        # pas se fabriquer une identité, elle reste déclarée dans Git.
+        clientId: opencode
+        resourceMetadata:
+          scopesSupported:
+          - openid
+          - groups
+          - agentgateway-audience
+          bearerMethodsSupported:
+          - header
 
-    # Garde-fou de coût. AgentGateway sait aussi limiter en TOKENS et pas
-    # seulement en requêtes, via rateLimit.global (nécessite un service RLS
-    # externe) : c'est la vraie réponse au "qui a brûlé le budget ?".
+    # Garde-fou de coût, à l'échelle de la passerelle. AgentGateway sait aussi
+    # limiter en TOKENS et pas seulement en requêtes, via rateLimit.global
+    # (service RLS externe) : c'est la vraie réponse au « qui a brûlé le budget ».
     rateLimit:
       local:
       - requests: 10

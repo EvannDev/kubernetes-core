@@ -6,7 +6,7 @@ namespace: agentgateway-system
 resources:
 - namespace.yaml
 - gateway.yaml
-- backend-llm.yaml
-- httproute-llm.yaml
+- externalsecret-llm.yaml
+- models.yaml
 - policy-llm.yaml
 - policy-observability.yaml

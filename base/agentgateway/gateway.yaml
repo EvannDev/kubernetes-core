@@ -22,3 +22,10 @@ spec:
       namespaces:
         # Les équipes exposent leurs serveurs MCP depuis leur propre namespace.
         from: All
+      # Sans AgentgatewayModel dans cette liste, les modèles ne s'attachent pas
+      # au listener et le catalogue reste vide.
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

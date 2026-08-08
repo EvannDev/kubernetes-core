@@ -46,6 +46,7 @@ SOURCES = [
     f"{AG}/agentgateway.dev_agentgatewaybackends.yaml",
     f"{AG}/agentgateway.dev_agentgatewaypolicies.yaml",
     f"{AG}/agentgateway.dev_agentgatewayparameters.yaml",
+    f"{AG}/agentgateway.dev_agentgatewaymodels.yaml",
     f"{AR}/application-crd.yaml",
     f"{AR}/applicationset-crd.yaml",
     f"{AR}/appproject-crd.yaml",

@@ -19,3 +19,9 @@ podMonitor:
     enabled: false
     gatewayClassNames:
     - agentgateway
+
+# API AgentgatewayModel : expérimentale, désactivée par défaut
+# (AGW_ENABLE_AGENTGATEWAY_MODELS=false). C'est elle qui permet de déclarer un
+# modèle comme ressource Kubernetes avec ses propres règles d'autorisation.
+agentgatewayModels:
+  enabled: true

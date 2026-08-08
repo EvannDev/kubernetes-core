@@ -1,0 +1,70 @@
+# LE CATALOGUE DE MODÈLES — un modèle = une ressource Kubernetes, avec sa
+# propre règle d'autorisation, versionnée et revue en pull request.
+#
+# API AgentgatewayModel, EXPÉRIMENTALE en 1.4 : elle exige
+# `agentgatewayModels.enabled: true` sur le contrôleur (variable
+# AGW_ENABLE_AGENTGATEWAY_MODELS, à false par défaut).
+#
+# Changement structurel : les modèles s'attachent DIRECTEMENT au listener de la
+# Gateway. La documentation est explicite — « Agentgateway derives the LLM
+# routing from the models that attach to a listener, so you do not create an
+# AgentgatewayBackend or an HTTPRoute ». D'où la suppression de httproute-llm et
+# du backend `openai`.
+#
+# CE QUI REND LA DÉMO SPECTACULAIRE : model_list_response() filtre
+# `/v1/models` sur `visibility == Public` ET sur `model_authorized(model, req)`.
+# La liste de modèles renvoyée est donc **propre à l'appelant**. Dans Open WebUI,
+# alice et bob ouvrent la même URL et ne voient pas le même menu déroulant —
+# sans qu'aucune ligne de code applicatif ne le sache.
+# (Effet de bord agréable : ça remplace proprement le contournement en
+#  Passthrough qu'il fallait pour /v1/models.)
+---
+# ── Modèle réservé ───────────────────────────────────────────────────────────
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-4o
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  # match.model omis : le nom de la ressource fait foi (ici "gpt-4o").
+  provider: OpenAI
+  policies:
+    # La clé d'API reste côté passerelle, projetée par External Secrets.
+    auth:
+      secretRef:
+        name: openai-secret
+    # « Authorization rules that clients must satisfy to use this model. »
+    # Même sémantique que partout ailleurs : les matchExpressions d'une règle
+    # sont en ET ; dès qu'une règle Allow existe, tout ce qui ne matche pas est
+    # refusé — ici avec un « Model authorization denied » explicite.
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - 'jwt.groups.exists(g, g == "platform-admins")'
+---
+# ── Modèle ouvert à tous les porteurs d'un token valide ──────────────────────
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-4o-mini
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  provider: OpenAI
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+    # Pas de bloc authorization : model_authorized() renvoie true quand aucune
+    # règle n'est déclarée. L'authentification reste exigée par la policy
+    # `ai-authn` posée sur la Gateway.
