@@ -29,6 +29,7 @@ resources:
 - 62-open-webui-config.yaml
 - 65-open-webui.yaml
 - 70-platform-gateway.yaml
+- 75-argocd-mcp.yaml
 - 90-apps.yaml
 
 labels:

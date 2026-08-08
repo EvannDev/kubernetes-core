@@ -34,6 +34,38 @@ extraEnvVars:
       }
     }
 
+# ── SERVEURS MCP ─────────────────────────────────────────────────────────────
+# Open WebUI 0.11 sait parler MCP nativement (`type: "mcp"`), sans passer par un
+# proxy mcpo. Et `auth_type: system_oauth` fonctionne aussi pour les serveurs
+# d'outils : le token OAuth de l'utilisateur connecté est transmis à la
+# passerelle, exactement comme pour le LLM.
+#
+# Conséquence : l'utilisateur devant l'écran est identifié jusqu'à l'outil.
+# La passerelle FILTRE la liste des outils selon son groupe — bob ne voit pas
+# `sync_application`, il ne sait même pas qu'il existe.
+#
+# Les deux serveurs passent par la même Gateway IA, sur des chemins distincts.
+- name: TOOL_SERVER_CONNECTIONS
+  value: |
+    [
+      {
+        "type": "mcp",
+        "url": "http://ai.agentgateway-system.svc.cluster.local",
+        "path": "/argocd",
+        "auth_type": "system_oauth",
+        "info": {"id": "argocd", "name": "Argo CD", "description": "Etat et pilotage des applications GitOps"},
+        "config": {"enable": true}
+      },
+      {
+        "type": "mcp",
+        "url": "http://ai.agentgateway-system.svc.cluster.local",
+        "path": "/mcp",
+        "auth_type": "system_oauth",
+        "info": {"id": "website-fetcher", "name": "Website fetcher", "description": "Recuperation de pages web"},
+        "config": {"enable": true}
+      }
+    ]
+
 # ── Une seule couche d'autorisation sur les modèles : la passerelle ──────────
 # Open WebUI possède SON PROPRE contrôle d'accès aux modèles (table
 # AccessGrants, visibilité Public/Private dans le panneau d'administration).

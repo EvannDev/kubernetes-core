@@ -1,0 +1,49 @@
+meta {
+  name: Chat - streaming (SSE)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{gatewayUrl}}/v1/chat/completions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "model": "{{modelOuvert}}",
+    "stream": true,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Compte de 1 a 10 en francais, un nombre par ligne."
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("la reponse est bien un flux SSE", function () {
+    const raw = typeof res.getBody() === "string" ? res.getBody() : JSON.stringify(res.getBody());
+    expect(raw).to.contain("data:");
+  });
+}
+
+docs {
+  La passerelle relaie le streaming sans le casser : les chunks `data: {...}` du
+  fournisseur traversent, et le flux se termine par `data: [DONE]`.
+
+  A dire au passage : c'est aussi la ou la comptabilisation des tokens est
+  delicate. Les metriques `agentgateway_gen_ai_client_token_usage`
+  (port 15020, dossier *07 Observabilite*) restent la source fiable pour le cout.
+}

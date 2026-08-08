@@ -1,0 +1,39 @@
+meta {
+  name: notifications-initialized
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+  ~Mcp-Session-Id: {{mcpSessionId}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  }
+}
+
+tests {
+  test("notification acceptee (202 ou 200, pas de corps d'erreur)", function () {
+    expect([200, 202, 204]).to.include(res.getStatus());
+  });
+}
+
+docs {
+  Fin protocolaire du handshake. Une notification JSON-RPC n'a pas d'`id` et
+  n'attend pas de reponse : un 202 sans corps est le comportement normal.
+
+  L'en-tete `Mcp-Session-Id` est **desactive** (prefixe `~` dans le fichier .bru).
+  Ne l'activer que si la requete `initialize` a bien renvoye un identifiant de
+  session.
+}

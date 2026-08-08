@@ -1,0 +1,11 @@
+meta {
+  name: 02 Models
+  seq: 2
+}
+
+docs {
+  `/v1/models` n'est pas un catalogue statique : `model_list_response()` filtre la
+  liste sur `visibility == Public` **et** sur `model_authorized(model, req)`. La
+  reponse est donc propre a l'appelant. Deux requetes, deux identites, deux
+  catalogues — sans une ligne de code applicatif.
+}

@@ -1,0 +1,75 @@
+meta {
+  name: 2 - Modele reserve avec bob (refus modele)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{gatewayUrl}}/v1/chat/completions
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+auth:oauth2 {
+  grant_type: password
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  username: {{bobUsername}}
+  password: {{bobPassword}}
+  client_id: {{clientId}}
+  client_secret:
+  scope: {{scopes}}
+  credentials_placement: body
+  credentials_id: kc-bob
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+body:json {
+  {
+    "model": "{{modelReserve}}",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Cette requete ne doit jamais atteindre le fournisseur."
+      }
+    ]
+  }
+}
+
+tests {
+  console.log("statut :", res.getStatus());
+  console.log("corps  :", JSON.stringify(res.getBody()).slice(0, 400));
+
+  test("bob est refuse sur le modele reserve", function () {
+    expect(res.getStatus()).to.be.at.least(400);
+  });
+
+  test("le refus vient de la passerelle, pas du fournisseur", function () {
+    const raw = JSON.stringify(res.getBody() || "").toLowerCase();
+    expect(raw).to.not.contain("choices");
+  });
+}
+
+docs {
+  Le jeton de bob est parfaitement valide : bonne signature, bon issuer, bonne
+  audience. Ce n'est pas l'authentification qui echoue, c'est l'**autorisation du
+  modele** — `AgentgatewayModel/gpt-4o`, `policies.authorization`.
+
+  Deux consequences a souligner :
+
+  1. La requete ne quitte jamais le cluster. Aucun token facture cote fournisseur.
+  2. La regle est un fichier YAML revu en pull request, pas une case cochee dans
+     une console SaaS.
+
+  Des qu'une regle `Allow` existe, tout ce qui ne matche pas est refuse
+  (*deny by default* implicite).
+}

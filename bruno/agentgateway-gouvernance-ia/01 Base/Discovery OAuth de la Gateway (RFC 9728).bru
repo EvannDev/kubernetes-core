@@ -1,0 +1,43 @@
+meta {
+  name: Discovery OAuth de la Gateway (RFC 9728)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{gatewayUrl}}/.well-known/oauth-protected-resource
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("accessible SANS jeton malgre la policy Strict", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("la passerelle designe Keycloak comme serveur d'autorisation", function () {
+    const body = res.getBody();
+    expect(JSON.stringify(body.authorization_servers)).to.contain("/realms/");
+  });
+}
+
+docs {
+  Servi par **AgentGateway lui-meme**, pas par Keycloak. C'est le bloc `mcp:` de
+  la policy `ai-authn` qui l'active, et sa presence a un effet de bord decisif :
+  les endpoints `/.well-known/*` echappent a la validation JWT. Sans ce bloc, une
+  policy `mode: Strict` posee sur la Gateway rendrait la decouverte impossible —
+  il faudrait un jeton pour apprendre comment en obtenir un.
+
+  `resource` et `authorization_servers` sont calcules par la passerelle ;
+  `clientId: opencode` court-circuite l'enregistrement dynamique de client
+  (RFC 7591) : un agent ne peut pas se fabriquer une identite, elle reste
+  declaree dans Git.
+}

@@ -1,0 +1,53 @@
+meta {
+  name: Metriques du data plane (tokens)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{metricsUrl}}/metrics
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: text/plain
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const raw = String(res.getBody());
+
+  test("les metriques de consommation de tokens sont exposees", function () {
+    expect(raw).to.contain("agentgateway_gen_ai_client_token_usage");
+  });
+
+  const lignes = raw.split("\n").filter((l) => l.startsWith("agentgateway_gen_ai_client_token_usage"));
+  console.log(lignes.slice(0, 20).join("\n") || "aucune ligne : jouer d'abord le dossier 03 Chat");
+}
+
+docs {
+  Necessite un second port-forward, le data plane exposant ses metriques sur
+  15020 :
+
+  ```
+  kubectl -n agentgateway-system port-forward deploy/ai 15020:15020
+  ```
+
+  La metrique a montrer :
+
+  ```
+  agentgateway_gen_ai_client_token_usage{gen_ai_token_type="input|output",
+                                         gen_ai_request_model="..."}
+  ```
+
+  Cote traces, la policy `ai-observability` ajoute deja aux access logs les
+  attributs `jwt.subject`, `jwt.groups` et `http.route` — donc chaque appel LLM
+  est attribuable a une identite, pas a une cle partagee. Pour du tracing
+  distribue il faut ajouter un bloc `frontend.tracing` pointant sur un collecteur
+  OTel (GRPC, port 4317), volontairement absent du depot pour ne pas creer une
+  dependance non deployee.
+}

@@ -1,0 +1,63 @@
+meta {
+  name: 06 OAuth PKCE (opencode)
+  seq: 6
+}
+
+auth {
+  mode: oauth2
+}
+
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: {{pkceCallbackUrl}}
+  authorization_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/auth
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  client_id: {{pkceClientId}}
+  client_secret:
+  scope: {{scopes}}
+  state: agentgateway-demo
+  pkce: true
+  credentials_placement: body
+  credentials_id: kc-pkce-opencode
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+docs {
+  Le vrai flux, celui qu'un agent deroule sur le poste d'un developpeur :
+  `authorization_code` + **PKCE**, client public `opencode`, aucun secret sur la
+  machine. Les requetes de ce dossier heritent de cette configuration
+  (`auth: inherit`) au lieu du *password grant* de la collection.
+
+  ## A faire avant de cliquer
+
+  Le `callback_url` doit correspondre a une entree de `redirectUris` du client
+  `opencode` dans le realm `platform` :
+
+  ```
+  redirectUris:
+  - http://localhost/*
+  - http://127.0.0.1/*
+  ```
+
+  `http://localhost/callback` matche. Si Keycloak repond
+  `Invalid parameter: redirect_uri`, ajouter l'URI exacte affichee par Bruno dans
+  le client (ou dans `base/keycloak/realm-platform.yaml` — mais attention :
+  `KeycloakRealmImport` ne met pas a jour un realm existant, il faut supprimer le
+  realm ou passer par la console).
+
+  ## Ce qu'on montre
+
+  1. Bruno ouvre une fenetre Keycloak -> se connecter en `alice` / `alice`.
+  2. Retour avec un code d'autorisation, echange contre un jeton avec le
+     `code_verifier` : **aucun client secret**.
+  3. La passerelle valide le jeton exactement comme celui du password grant. Elle
+     ne sait pas, et n'a pas besoin de savoir, comment il a ete obtenu.
+
+  En production on epingle l'URI exacte : un `redirect_uri` en joker est une vraie
+  faille (vol de code d'autorisation).
+}

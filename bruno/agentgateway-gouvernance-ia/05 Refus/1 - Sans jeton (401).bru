@@ -1,0 +1,30 @@
+meta {
+  name: 1 - Sans jeton (401)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("la passerelle refuse l'anonyme", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}
+
+docs {
+  `jwtAuthentication.mode: Strict` sur la Gateway : pas de jeton, pas de trafic —
+  ni LLM ni MCP. En mode `Permissive`, la requete passerait sans identite et les
+  regles d'autorisation ne pourraient rien evaluer.
+
+  Noter que `/.well-known/*` (dossier *01 Base*) reste accessible : c'est
+  l'exception voulue, introduite par le bloc `mcp:` de la policy.
+}

@@ -9,6 +9,12 @@ dex:
 
 configs:
   cm:
+    # Compte de service pour le serveur MCP Argo CD. `apiKey` autorise la
+    # génération d'un token d'API sans mot de passe ni session.
+    # Le token lui-même n'est PAS ici : il est produit une fois hors GitOps,
+    # déposé dans le coffre, et projeté par External Secrets.
+    accounts.mcp: apiKey
+
     # Garder le compte admin local comme issue de secours : une oidc.config
     # invalide rend sinon l'UI inaccessible.
     admin.enabled: true
@@ -26,6 +32,23 @@ configs:
     policy.csv: |
       g, platform-admins, role:admin
       g, platform-viewers, role:readonly
+
+      # Plafond du serveur MCP. Ce compte porte l'identité UNIQUE avec laquelle
+      # le serveur MCP parle à Argo CD : la distinction admin / lecteur se fait
+      # à la passerelle, pas ici. Cette RBAC est donc un PLAFOND grossier — ce
+      # que le serveur pourrait faire au pire — et non un contrôle par
+      # utilisateur. Le restreindre reste utile : c'est la seconde barrière si
+      # la policy de la passerelle était mal écrite.
+      p, role:mcp, applications, get, */*, allow
+      p, role:mcp, applications, sync, */*, allow
+      p, role:mcp, applications, create, */*, allow
+      p, role:mcp, applications, update, */*, allow
+      p, role:mcp, applications, delete, */*, allow
+      p, role:mcp, applications, action/*, */*, allow
+      p, role:mcp, logs, get, */*, allow
+      p, role:mcp, clusters, get, *, allow
+      p, role:mcp, projects, get, *, allow
+      g, mcp, role:mcp
     scopes: "[groups]"
 
   params:

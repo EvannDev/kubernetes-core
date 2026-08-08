@@ -1,0 +1,49 @@
+meta {
+  name: Catalogue - alice (platform-admins)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  const ids = res.getBody().data.map((m) => m.id);
+  console.log("modeles visibles par alice :", ids.join(", "));
+
+  test("alice voit le modele ouvert", function () {
+    expect(ids).to.include(V("modelOuvert"));
+  });
+
+  test("alice voit AUSSI le modele reserve", function () {
+    expect(ids).to.include(V("modelReserve"));
+  });
+}
+
+docs {
+  alice appartient au groupe `platform-admins`, donc elle satisfait la regle
+  d'autorisation de `AgentgatewayModel/gpt-4o` :
+
+  ```
+  authorization:
+    action: Allow
+    policy:
+      matchExpressions:
+      - 'jwt.groups.exists(g, g == "platform-admins")'
+  ```
+
+  Elle voit les deux modeles. A comparer immediatement avec la requete suivante.
+}

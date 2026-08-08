@@ -1,0 +1,45 @@
+meta {
+  name: 6 - Rate limit (10 requetes par minute)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  console.log("statut :", res.getStatus());
+
+  test("statut coherent avec le garde-fou de debit", function () {
+    expect([200, 429]).to.include(res.getStatus());
+  });
+
+  if (res.getStatus() === 429) {
+    console.log("429 atteint : rateLimit.local de la policy ai-authn");
+  }
+}
+
+docs {
+  Rejouer cette requete une quinzaine de fois d'affilee (ou lancer le dossier en
+  boucle) : au-dela du seuil, la passerelle repond `429`.
+
+  ```
+  rateLimit:
+    local:
+    - requests: 10
+      unit: Minutes
+      burst: 5
+  ```
+
+  `local` = par instance du data plane, sans dependance externe. Le garde-fou qui
+  compte vraiment pour le cout est ailleurs : AgentGateway sait limiter en
+  **tokens** et pas seulement en requetes, via `rateLimit.global` (service RLS
+  externe). C'est la vraie reponse au « qui a brule le budget ».
+}

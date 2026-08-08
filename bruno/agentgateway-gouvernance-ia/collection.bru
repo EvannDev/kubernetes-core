@@ -1,0 +1,122 @@
+auth {
+  mode: oauth2
+}
+
+auth:oauth2 {
+  grant_type: password
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  username: {{username}}
+  password: {{password}}
+  client_id: {{clientId}}
+  client_secret:
+  scope: {{scopes}}
+  credentials_placement: body
+  credentials_id: kc-alice
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+script:pre-request {
+  // FILET DE SECURITE — a lire si les variables apparaissent en rouge.
+  //
+  // Bruno demarre sur « No Environment » : dans ce cas AUCUNE variable n'est
+  // resolue et les requetes partent avec des placeholders litteraux. Le bon reflexe
+  // reste de selectionner l'environnement **lab** en haut a droite ; ce script
+  // evite juste que la demo tombe a l'eau si on l'oublie sur scene.
+  const defauts = {
+    gatewayUrl: "http://localhost:8081",
+    keycloakUrl: "http://keycloak.127.0.0.1.nip.io:8080",
+    realm: "platform",
+    clientId: "mcp-client",
+    pkceClientId: "opencode",
+    pkceCallbackUrl: "http://localhost/callback",
+    scopes: "openid groups agentgateway-audience",
+    scopesSansAudience: "openid groups",
+    username: "alice",
+    password: "alice",
+    bobUsername: "bob",
+    bobPassword: "bob",
+    modelOuvert: "gpt-4o-mini",
+    modelReserve: "gpt-4o",
+    mcpPath: "/mcp",
+    mcpTool: "fetch",
+    mcpToolNonAutorise: "fetch_all",
+    mcpTargetUrl: "https://example.com",
+    metricsUrl: "http://localhost:15020"
+  };
+
+  if (!bru.getEnvName()) {
+    Object.keys(defauts).forEach(function (cle) {
+      if (!bru.hasVar(cle)) {
+        bru.setVar(cle, defauts[cle]);
+      }
+    });
+    console.log("Aucun environnement selectionne : valeurs du lab appliquees par defaut. Selectionner « lab » pour reprendre la main.");
+  } else {
+    // Un environnement est actif : on retire les valeurs de repli eventuellement
+    // posees par une execution precedente, sinon elles masqueraient l'environnement
+    // (une variable d'execution est prioritaire sur une variable d'environnement).
+    Object.keys(defauts).forEach(function (cle) {
+      if (bru.hasEnvVar(cle) && bru.hasVar(cle)) {
+        bru.deleteVar(cle);
+      }
+    });
+  }
+}
+
+docs {
+  # AgentGateway - Gouvernance IA (lab kubernetes-core)
+
+  Collection de demonstration pour le Lunch & Learn. Elle tape **la Gateway IA**
+  (`gatewayClassName: agentgateway`) du depot `kubernetes-core`, et rien d'autre :
+  aucune cle de fournisseur LLM n'est presente ici, c'est tout le propos.
+
+  ## Prerequis
+
+  ```
+  make up                 # cluster kind + socle GitOps
+  make port-forward-ai    # Gateway IA -> http://localhost:8081
+  ```
+
+  ## Si toutes les {{variables}} sont en rouge
+
+  Bruno s'ouvre sur **No Environment** : dans cet etat aucune variable n'est
+  resolue, ni dans l'URL ni dans l'onglet Auth. Selectionner l'environnement
+  **lab** dans le selecteur en haut a droite — c'est tout.
+
+  Un filet de securite est pose dans le script de pre-requete de cette
+  collection : sans environnement selectionne, il applique les valeurs du lab et
+  le signale dans la console. Des qu'un environnement est actif, il s'efface et
+  laisse la main a l'environnement.
+
+  ## Authentification
+
+  - **Auth de la collection** : OAuth2 *password grant* sur le client public
+    `mcp-client` (`directAccessGrantsEnabled: true` dans le realm `platform`).
+    Un clic sur *Get Token*, ou `auto_fetch_token` s'en charge.
+    Identite par defaut : `alice` (groupe `platform-admins`).
+  - Les requetes qui doivent parler **au nom de bob** (`platform-viewers`)
+    portent leur propre bloc OAuth2 avec un `credentials_id` distinct
+    (`kc-bob`) : les deux jetons coexistent, on compare les deux identites
+    sans rien changer dans l'interface.
+  - Le dossier **06 OAuth PKCE** rejoue le vrai flux navigateur
+    (`authorization_code` + PKCE) sur le client public `opencode`.
+
+  ## Ce que la passerelle decide, et ou
+
+  | Decision | Ressource Kubernetes |
+  | --- | --- |
+  | QUI es-tu (JWT, issuer, audience) + debit | `AgentgatewayPolicy/ai-authn` sur la Gateway |
+  | As-tu droit a CE modele | `AgentgatewayModel/gpt-4o` (`policies.authorization`) |
+  | As-tu droit a CET outil MCP | `AgentgatewayPolicy/mcp-tool-rbac` sur le backend |
+
+  ## Scope obligatoire
+
+  `agentgateway-audience` alimente le claim `aud: agentgateway`, exige par
+  `jwtAuthentication.providers[].audiences`. Sans lui : 401 parfaitement legitime
+  et parfaitement incomprehensible. Le dossier *05 Refus* en fait la demonstration.
+}

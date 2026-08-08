@@ -1,0 +1,88 @@
+meta {
+  name: 5 - MCP outil non autorise (bob) - 200 + erreur JSON-RPC
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+auth:oauth2 {
+  grant_type: password
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  username: {{bobUsername}}
+  password: {{bobPassword}}
+  client_id: {{clientId}}
+  client_secret:
+  scope: {{scopes}}
+  credentials_placement: body
+  credentials_id: kc-bob
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "{{mcpToolNonAutorise}}",
+      "arguments": {
+        "url": "{{mcpTargetUrl}}"
+      }
+    }
+  }
+}
+
+tests {
+  console.log("statut :", res.getStatus());
+  console.log("corps  :", JSON.stringify(res.getBody()));
+
+  test("le refus arrive en HTTP 200 (piege AgentGateway 1.4)", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("le corps porte l'erreur, pas un resultat d'outil", function () {
+    const body = res.getBody();
+    const refuse = Boolean(body.error) || Boolean(body.result && body.result.isError);
+    expect(refuse, "ni error ni result.isError dans la reponse").to.be.true;
+  });
+}
+
+docs {
+  **Le piege a mettre sur une diapositive** : en AgentGateway 1.4, un refus MCP en
+  phase requete renvoie `HTTP 200` avec un corps JSON-RPC d'erreur, et non un code
+  non-2xx. Un client qui ne regarde que le statut HTTP croit que tout va bien.
+
+  Ce que la regle CEL dit exactement :
+
+  ```
+  - 'jwt.groups.exists(g, g == "platform-admins") || mcp.tool.name == "fetch"'
+  ```
+
+  bob n'est pas admin, et l'outil demande n'est pas `fetch` : les deux termes sont
+  faux, la regle `Allow` ne matche pas, la passerelle refuse **avant** de
+  transmettre au serveur MCP. Le serveur ne voit jamais l'appel.
+
+  Nuance a assumer si on la remarque en direct : le serveur de demo n'expose que
+  `fetch`, donc `{{mcpToolNonAutorise}}` n'existe pas. C'est justement l'interet —
+  joue avec le jeton d'alice, la meme requete produit une erreur *"tool not
+  found"* venue du serveur ; avec bob, elle produit un refus venu de la
+  passerelle. Deux erreurs, deux origines, et c'est ce qu'on veut demontrer.
+
+  Rappel : les `matchExpressions` d'UNE regle sont en ET ; plusieurs regles
+  `Allow` fusionnent en OU. Pour un OU intra-regle, on l'ecrit en CEL avec `||`.
+}

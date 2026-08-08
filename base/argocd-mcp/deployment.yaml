@@ -1,0 +1,68 @@
+# Serveur MCP Argo CD — argoproj-labs/mcp-for-argocd.
+#
+# Note de gouvernance qui décide de toute l'architecture : ce serveur porte UNE
+# SEULE identité Argo CD (le token du compte de service ci-dessous). Argo CD ne
+# voit donc qu'un seul appelant, quel que soit l'utilisateur réel. La distinction
+# admin / lecteur ne peut PAS venir d'Argo CD : elle doit être faite par la
+# passerelle, sur l'identité du porteur du JWT. C'est exactement l'argument du
+# Lunch & Learn, rendu concret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-mcp
+  namespace: argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: argocd-mcp
+  template:
+    metadata:
+      labels:
+        app: argocd-mcp
+    spec:
+      containers:
+      - name: argocd-mcp
+        image: ghcr.io/argoproj-labs/mcp-for-argocd:v0.8.0
+        # L'image a un CMD sans ENTRYPOINT et démarre en mode STATEFUL : il
+        # garde une table sessionId -> transport en mémoire et exige l'en-tête
+        # Mcp-Session-Id. Au-delà d'un replica sans affinité de session, ça
+        # renvoie « Invalid or expired session ID ». D'où --stateless, et d'où
+        # la réécriture complète de la commande.
+        args: ["node", "dist/index.js", "http", "--stateless", "--port", "3000"]
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: ARGOCD_BASE_URL
+          value: http://argocd-server.argocd.svc.cluster.local
+        - name: ARGOCD_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: argocd-mcp
+              key: token
+        # On N'ACTIVE PAS MCP_READ_ONLY : le serveur expose ses 16 outils, et
+        # c'est la passerelle qui décide qui appelle quoi. MCP_READ_ONLY est du
+        # tout ou rien (il désenregistre les 5 outils mutants pour tout le
+        # monde) : il ne sait pas faire « admins oui, lecteurs non ».
+        # Variante défense en profondeur : cf. ARCHITECTURE.md.
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]

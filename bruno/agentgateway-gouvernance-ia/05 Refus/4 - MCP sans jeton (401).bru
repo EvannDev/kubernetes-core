@@ -1,0 +1,37 @@
+meta {
+  name: 4 - MCP sans jeton (401)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  }
+}
+
+tests {
+  test("MCP anonyme refuse au niveau HTTP", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}
+
+docs {
+  Equivalent de `make demo-mcp-anonymous`. Ici le refus est bien un **401 HTTP** :
+  il est prononce par la couche d'authentification avant toute interpretation
+  JSON-RPC. A comparer avec la requete suivante, ou le refus est une decision
+  d'autorisation *dans* le protocole MCP.
+}

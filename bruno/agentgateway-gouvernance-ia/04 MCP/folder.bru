@@ -1,0 +1,15 @@
+meta {
+  name: 04 MCP
+  seq: 4
+}
+
+docs {
+  Le meme point de passage, l'autre moitie du trafic. `HTTPRoute/mcp` (namespace
+  `mcp-demo`) attache `/mcp` a la Gateway `ai` et pointe sur un
+  `AgentgatewayBackend` de type `mcp`. La Gateway l'accepte parce qu'elle declare
+  `allowedRoutes.namespaces.from: All` : decision de plateforme, pas
+  d'application.
+
+  L'autorisation ne porte pas sur l'acces au serveur mais sur **l'outil appele**
+  (`AgentgatewayPolicy/mcp-tool-rbac`, cible : le backend).
+}

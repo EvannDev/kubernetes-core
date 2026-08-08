@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Rien de propre au cluster : le serveur MCP parle à Argo CD par son Service
+# interne, et la policy ne dépend que des groupes du realm.
+resources:
+- ../../../base/argocd-mcp

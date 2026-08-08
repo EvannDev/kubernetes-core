@@ -1,0 +1,47 @@
+meta {
+  name: Discovery OIDC (Keycloak)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{keycloakUrl}}/realms/{{realm}}/.well-known/openid-configuration
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  test("l'issuer est exactement celui attendu par la passerelle", function () {
+    const body = res.getBody();
+    expect(body.issuer).to.equal(V("keycloakUrl") + "/realms/" + V("realm"));
+  });
+
+  test("les scopes de la demo existent bien dans le realm", function () {
+    const scopes = res.getBody().scopes_supported;
+    expect(scopes).to.include("groups");
+    expect(scopes).to.include("agentgateway-audience");
+    expect(scopes).to.include("profile");
+  });
+}
+
+docs {
+  Le champ `issuer` doit correspondre **au caractere pres** a
+  `spec.traffic.jwtAuthentication.providers[0].issuer` de la policy `ai-authn`
+  (surcharge par cluster dans `clusters/lab/agentgateway/kustomization.yaml`).
+  C'est la cause n.1 des 401 inexplicables.
+
+  Le test sur `scopes_supported` est la sentinelle du piege Keycloak documente
+  dans le realm : declarer `clientScopes` desactive la creation des scopes
+  integres. Si `profile` disparait de cette liste, c'est que l'attribut
+  `CreateDefaultClientScopes: "true"` a ete perdu.
+}

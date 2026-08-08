@@ -1,0 +1,65 @@
+meta {
+  name: initialize
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-06-18",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "bruno-lunch-and-learn",
+        "version": "1.0.0"
+      }
+    }
+  }
+}
+
+script:post-response {
+  // Le transport MCP streamable HTTP renvoie un identifiant de session dans
+  // l'en-tete mcp-session-id. On le memorise pour les appels suivants.
+  const sid = res.getHeader("mcp-session-id") || res.getHeader("Mcp-Session-Id");
+  if (sid) {
+    bru.setVar("mcpSessionId", sid);
+    console.log("mcp-session-id :", sid);
+  } else {
+    console.log("pas de mcp-session-id renvoye : la passerelle repond sans session, les appels suivants marchent quand meme");
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("la passerelle a repondu au handshake MCP", function () {
+    const body = res.getBody();
+    expect(JSON.stringify(body)).to.contain("protocolVersion");
+  });
+}
+
+docs {
+  Handshake du protocole. Utile pour montrer que la passerelle parle vraiment MCP
+  et ne se contente pas de proxifier du HTTP : elle multiplexe les `targets`
+  declares dans `AgentgatewayBackend.spec.mcp.targets` (ici un seul,
+  `website-fetcher`, en `protocol: SSE` cote serveur).
+
+  `Accept: application/json` force une reponse JSON plutot qu'un flux SSE : plus
+  lisible dans Bruno.
+}

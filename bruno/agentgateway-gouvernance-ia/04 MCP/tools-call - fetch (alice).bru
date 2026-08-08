@@ -1,0 +1,64 @@
+meta {
+  name: tools-call - fetch (alice)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+  ~Mcp-Session-Id: {{mcpSessionId}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "{{mcpTool}}",
+      "arguments": {
+        "url": "{{mcpTargetUrl}}"
+      }
+    }
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("l'appel d'outil a abouti", function () {
+    const body = res.getBody();
+    expect(body.error, "erreur JSON-RPC au niveau protocole").to.be.undefined;
+    expect(body.result, "pas de result").to.exist;
+  });
+
+  test("le resultat n'est pas un refus deguise", function () {
+    const r = res.getBody().result || {};
+    expect(r.isError, JSON.stringify(r.content || r)).to.not.equal(true);
+  });
+}
+
+docs {
+  alice (`platform-admins`) satisfait la regle du backend :
+
+  ```
+  matchExpressions:
+  - 'jwt.groups.exists(g, g == "platform-admins") || mcp.tool.name == "fetch"'
+  ```
+
+  Les deux termes sont vrais pour elle. bob ne satisfait que le second — d'ou le
+  choix de l'outil dans *05 Refus*.
+
+  Rappel des variables CEL disponibles : `jwt.sub`, `jwt.iss`, n'importe quel
+  claim (`jwt.groups`), `mcp.tool.name`, `source.address`, `request.path`,
+  `request.host`, `request.headers[...]`, `response.code`.
+}

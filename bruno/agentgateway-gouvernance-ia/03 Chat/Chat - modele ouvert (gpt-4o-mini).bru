@@ -1,0 +1,66 @@
+meta {
+  name: Chat - modele ouvert (gpt-4o-mini)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{gatewayUrl}}/v1/chat/completions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "model": "{{modelOuvert}}",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Tu es concis. Trois phrases maximum."
+      },
+      {
+        "role": "user",
+        "content": "Explique en une phrase pourquoi une passerelle IA vaut mieux qu'une cle d'API distribuee a chaque agent."
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  test("la passerelle a bien relaye la reponse du fournisseur", function () {
+    const body = res.getBody();
+    expect(body.choices[0].message.content).to.be.a("string").that.is.not.empty;
+  });
+
+  test("le modele repondu est celui demande", function () {
+    expect(res.getBody().model).to.contain(V("modelOuvert"));
+  });
+
+  const u = res.getBody().usage;
+  if (u) {
+    console.log("tokens prompt/completion/total :", u.prompt_tokens, u.completion_tokens, u.total_tokens);
+  }
+}
+
+docs {
+  `AgentgatewayModel/gpt-4o-mini` n'a **aucun** bloc `authorization` :
+  `model_authorized()` renvoie vrai quand aucune regle n'est declaree. Tout
+  porteur d'un jeton valide peut donc l'utiliser — l'authentification, elle, reste
+  exigee par la policy `ai-authn` posee sur la Gateway.
+
+  La cle OpenAI n'est pas dans cette requete. Elle est projetee par External
+  Secrets dans le Secret `openai-secret` (cle litterale `Authorization`) et
+  referencee par `policies.auth.secretRef` du modele. Une cle, un point d'audit,
+  une revocation.
+}

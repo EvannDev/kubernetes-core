@@ -1,0 +1,43 @@
+meta {
+  name: Catalogue de modeles (via PKCE)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: inherit
+}
+
+headers {
+  Accept: application/json
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  const ids = res.getBody().data.map((m) => m.id);
+  console.log("modeles visibles (jeton PKCE) :", ids.join(", "));
+
+  test("le jeton obtenu par PKCE est accepte par la passerelle", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("le catalogue est filtre selon l'utilisateur qui s'est connecte", function () {
+    expect(ids).to.include(V("modelOuvert"));
+  });
+}
+
+docs {
+  Meme endpoint que *02 Models*, autre mode d'obtention du jeton. Se connecter en
+  `bob` pour verifier que le filtrage du catalogue suit l'utilisateur du flux
+  navigateur, et pas une variable d'environnement.
+
+  Le client `opencode` a `agentgateway-audience` dans ses `defaultClientScopes` :
+  l'audience est donc presente meme si le `scope` demande ne la mentionne pas.
+}

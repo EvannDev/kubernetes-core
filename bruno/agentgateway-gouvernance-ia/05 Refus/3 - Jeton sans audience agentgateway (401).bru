@@ -1,0 +1,57 @@
+meta {
+  name: 3 - Jeton sans audience agentgateway (401)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+auth:oauth2 {
+  grant_type: password
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  username: {{username}}
+  password: {{password}}
+  client_id: {{clientId}}
+  client_secret:
+  scope: {{scopesSansAudience}}
+  credentials_placement: body
+  credentials_id: kc-alice-sans-audience
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+tests {
+  test("audience manquante -> 401", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}
+
+docs {
+  Le piege qui coute une heure a tout le monde. Le jeton est **valide**, alice est
+  **la bonne personne**, et pourtant : 401.
+
+  La difference avec les requetes qui passent : le scope
+  `agentgateway-audience` n'a pas ete demande (`scope: {{scopesSansAudience}}`),
+  donc l'`oidc-audience-mapper` ne s'est pas declenche, donc `aud` ne contient pas
+  `agentgateway`, donc `jwtAuthentication.providers[].audiences` ne matche pas.
+
+  C'est exactement le 401 qu'on obtient dans Open WebUI si l'on oublie ce scope
+  sur le client `open-webui` : Open WebUI retransmet le jeton de sa propre session
+  SSO (`auth_type: system_oauth`), emis pour SON client, avec l'`aud` que CE
+  client demande.
+
+  Pour comparer les jetons cote a cote : le dossier *01 Base* decode celui qui
+  fonctionne.
+}

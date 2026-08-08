@@ -1,0 +1,16 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: argocd-mcp
+  namespace: argocd
+spec:
+  mcp:
+    targets:
+    - name: argocd
+      static:
+        backendRef:
+          name: argocd-mcp
+        port: 80
+        # Transport moderne (le SSE est déprécié côté MCP). Le chemin par défaut
+        # pour StreamableHTTP est /mcp, qui est bien ce qu'expose le serveur.
+        protocol: StreamableHTTP

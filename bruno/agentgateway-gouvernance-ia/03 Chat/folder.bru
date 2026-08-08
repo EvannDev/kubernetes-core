@@ -1,0 +1,11 @@
+meta {
+  name: 03 Chat
+  seq: 3
+}
+
+docs {
+  Le trafic d'inference. Depuis le passage au catalogue `AgentgatewayModel`, il
+  n'y a **plus de HTTPRoute** pour le LLM : les modeles s'attachent directement au
+  listener `http` de la Gateway `ai`, et la passerelle en derive le routage.
+  Endpoints OpenAI servis : `/v1/chat/completions`, `/v1/models`, `/v1/responses`.
+}

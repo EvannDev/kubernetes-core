@@ -1,0 +1,21 @@
+vars {
+  gatewayUrl: http://localhost:8081
+  keycloakUrl: http://keycloak.127.0.0.1.nip.io:8080
+  realm: platform
+  clientId: mcp-client
+  pkceClientId: opencode
+  pkceCallbackUrl: http://localhost/callback
+  scopes: openid groups agentgateway-audience
+  scopesSansAudience: openid groups
+  username: alice
+  password: alice
+  bobUsername: bob
+  bobPassword: bob
+  modelOuvert: gpt-4o-mini
+  modelReserve: gpt-4o
+  mcpPath: /mcp
+  mcpTool: fetch
+  mcpToolNonAutorise: fetch_all
+  mcpTargetUrl: https://example.com
+  metricsUrl: http://localhost:15020
+}

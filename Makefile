@@ -28,7 +28,7 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	         clusters/$(CLUSTER)/cluster-dns \
 	         clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
 	         clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
-	         clusters/$(CLUSTER)/open-webui \
+	         clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
 	         apps/mcp-website-fetcher; do \
 	  printf '%-45s' "kustomize build $$d"; \
 	  kustomize build $$d > /dev/null && echo OK; \
@@ -39,7 +39,7 @@ KUSTOMIZE_DIRS := bootstrap projects \
   clusters/$(CLUSTER)/platform clusters/$(CLUSTER)/cluster-dns \
   clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
   clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
-  clusters/$(CLUSTER)/open-webui \
+  clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
   apps/mcp-website-fetcher
 
 validate-crs: ## Valide les CR contre les CRD upstream : schéma ET règles CEL
@@ -102,6 +102,14 @@ seed-secrets: ## 4. Sème les secrets sources du "coffre" (hors GitOps, une seul
 	  --from-literal=apiKey="$${OPENAI_API_KEY:-sk-remplacer}" \
 	  --dry-run=client -o yaml | kubectl apply -f -
 	@echo ">> Secrets sources en place. ESO les projettera dans keycloak et agentgateway-system."
+
+seed-argocd-mcp-token: ## Génère le token du compte MCP et le dépose dans le coffre
+	# Le compte `mcp` et sa capacité apiKey sont déclarés dans base/argocd/values.yaml.
+	# Le token, lui, ne peut pas être déclaratif : Argo CD le génère.
+	@kubectl -n platform-secrets create secret generic argocd-mcp \
+	  --from-literal=token="$$(argocd account generate-token --account mcp --grpc-web)" \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	@echo ">> Token déposé. ESO le projettera dans le namespace argocd."
 
 install-argocd: ## 5. Amorce Argo CD avec EXACTEMENT le chart et les valeurs de Git
 	helm repo add argo https://argoproj.github.io/argo-helm >/dev/null

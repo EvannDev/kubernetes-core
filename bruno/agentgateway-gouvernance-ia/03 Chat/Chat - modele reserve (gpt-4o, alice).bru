@@ -1,0 +1,45 @@
+meta {
+  name: Chat - modele reserve (gpt-4o, alice)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{gatewayUrl}}/v1/chat/completions
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "model": "{{modelReserve}}",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Resume en deux phrases la difference entre authentification et autorisation."
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("alice est autorisee sur le modele reserve", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().choices[0].message.content).to.be.a("string").that.is.not.empty;
+  });
+}
+
+docs {
+  La meme requete jouee avec le jeton de bob est dans **05 Refus**. C'est le
+  diptyque a montrer : une seule ligne de CEL versionnee dans Git separe les deux
+  resultats.
+}

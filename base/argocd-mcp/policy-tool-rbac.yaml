@@ -1,0 +1,82 @@
+# LA policy qui porte toute la démonstration « admin vs lecteur ».
+#
+# Le serveur MCP Argo CD expose 16 outils et ne sait pas les restreindre
+# individuellement : son seul réglage est MCP_READ_ONLY, du tout ou rien, pour
+# tout le monde à la fois. Et comme il porte une identité Argo CD unique, la RBAC
+# d'Argo CD ne voit qu'un seul appelant. Le seul endroit où « alice peut
+# synchroniser, bob non » peut s'exprimer, c'est ici.
+#
+# CE QUI REND LA DÉMO FRAPPANTE : agentgateway ne se contente pas de refuser les
+# appels, il FILTRE LA LISTE. Dans le code (mcp/handler.rs) :
+#
+#   // Apply authorization policies, filtering tools that are not allowed.
+#   .filter(|t| policies.validate(ResourceType::Tool(...), cel))
+#
+# Bob ne reçoit donc que 11 outils dans `tools/list` — il ne sait même pas que
+# `sync_application` existe. Son agent ne peut pas être manipulé pour appeler un
+# outil qu'il n'a jamais vu : c'est une réduction de surface d'attaque, pas
+# seulement un contrôle d'accès.
+#
+# Liste des outils vérifiée dans le code source (src/server/server.ts,
+# 16 enregistrements) et NON dans le README, qui en omet deux —
+# `get_application_events` et `get_resources`. Un policy écrit depuis le README
+# aurait laissé deux outils de lecture non couverts.
+#
+# Note de version : `get_appproject` a été ajouté APRÈS la 0.8.0. Avec l'image
+# épinglée en v0.8.0 il y a 15 outils, 16 sur `main`. La règle le couvre déjà.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: argocd-mcp-rbac
+  namespace: argocd
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: argocd-mcp
+
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+          # Les administrateurs plateforme ont les 16 outils, mutations
+          # comprises : create, update, delete, sync, run_resource_action.
+          - 'jwt.groups.exists(g, g == "platform-admins")'
+
+          # Tous les autres porteurs d'un token valide : lecture seule.
+          # Deux règles Allow distinctes se comportent en OU (elles sont
+          # fusionnées), contrairement aux matchExpressions d'une même règle qui
+          # sont en ET.
+          - >-
+            mcp.tool.name in [
+              "list_applications",
+              "list_clusters",
+              "get_application",
+              "get_appproject",
+              "get_application_resource_tree",
+              "get_application_managed_resources",
+              "get_application_workload_logs",
+              "get_application_events",
+              "get_resource_events",
+              "get_resources",
+              "get_resource_actions"
+            ]
+
+# DEUX LECTURES SENSIBLES, à signaler plutôt qu'à cacher :
+#
+#  - `get_resources` renvoie les MANIFESTES LIVE des ressources gérées, donc le
+#    contenu des Secrets. C'est l'outil le plus sensible du lot, et c'est un
+#    outil de « lecture ».
+#  - `get_application_workload_logs` renvoie les logs applicatifs.
+#
+# Les laisser en lecture seule est un choix, pas une évidence. Pour un vrai
+# déploiement, les réserver aux admins est défendable :
+#   'jwt.groups.exists(g, g == "platform-admins")' pour ces deux-là,
+#   et la liste réduite pour les autres.
+#
+# À noter aussi : chaque outil accepte un argument `argocdBaseUrl` qui change
+# l'instance Argo CD visée. Une règle portant seulement sur le nom de l'outil ne
+# contraint pas la cible. Le serveur s'en protège (le token par défaut n'est
+# jamais envoyé à un autre hôte que celui par défaut), mais c'est à connaître.

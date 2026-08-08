@@ -1,0 +1,53 @@
+meta {
+  name: tools-list
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{gatewayUrl}}{{mcpPath}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+  ~Mcp-Session-Id: {{mcpSessionId}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list"
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  const body = res.getBody();
+  const tools = (body.result && body.result.tools) || [];
+  console.log("outils exposes :", tools.map((t) => t.name).join(", "));
+
+  test("la liste des outils est renvoyee", function () {
+    expect(tools).to.be.an("array").that.is.not.empty;
+  });
+
+  test("l'outil de demo est present", function () {
+    expect(tools.map((t) => t.name)).to.include(V("mcpTool"));
+  });
+}
+
+docs {
+  Equivalent exact de `make demo-mcp`, mais avec le jeton gere par Bruno.
+
+  Le serveur de demo (`ghcr.io/peterj/mcp-website-fetcher:main`) expose un seul
+  outil : `fetch`. C'est suffisant pour la demonstration d'autorisation, puisque
+  la regle CEL distingue `fetch` du reste.
+}

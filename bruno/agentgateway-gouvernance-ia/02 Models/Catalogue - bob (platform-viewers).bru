@@ -1,0 +1,66 @@
+meta {
+  name: Catalogue - bob (platform-viewers)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{gatewayUrl}}/v1/models
+  body: none
+  auth: oauth2
+}
+
+headers {
+  Accept: application/json
+}
+
+auth:oauth2 {
+  grant_type: password
+  access_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  refresh_token_url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  username: {{bobUsername}}
+  password: {{bobPassword}}
+  client_id: {{clientId}}
+  client_secret:
+  scope: {{scopes}}
+  credentials_placement: body
+  credentials_id: kc-bob
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  const V = function (cle) { return bru.getEnvVar(cle) || bru.getVar(cle); };
+
+  const ids = res.getBody().data.map((m) => m.id);
+  console.log("modeles visibles par bob :", ids.join(", "));
+
+  test("bob voit le modele ouvert", function () {
+    expect(ids).to.include(V("modelOuvert"));
+  });
+
+  test("bob ne voit PAS le modele reserve", function () {
+    expect(ids).to.not.include(V("modelReserve"));
+  });
+}
+
+docs {
+  Meme URL, meme instant, **catalogue different**. bob est dans
+  `platform-viewers` : `model_authorized()` renvoie faux pour `gpt-4o`, qui
+  disparait de la liste.
+
+  C'est l'effet visible dans Open WebUI : alice et bob ouvrent la meme page et
+  n'ont pas le meme menu deroulant.
+
+  Detail d'implementation Bruno : cette requete porte son propre bloc OAuth2 avec
+  `credentials_id: kc-bob`. Bruno met les jetons en cache par `credentials_id`,
+  donc le jeton d'alice (`kc-alice`) et celui de bob coexistent. Rien a rebasculer
+  entre deux executions.
+}
