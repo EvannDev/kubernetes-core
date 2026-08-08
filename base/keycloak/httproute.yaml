@@ -8,7 +8,9 @@ metadata:
   namespace: keycloak
 spec:
   parentRefs:
-  - name: platform
+  - group: gateway.networking.k8s.io	
+    kind: Gateway
+    name: platform
     namespace: platform-gateway
     sectionName: http
   # PLACEHOLDER : surchargé par cluster.
@@ -21,5 +23,8 @@ spec:
         value: /
     backendRefs:
     # Nom du Service créé par l'opérateur : <nom du CR Keycloak>-service
-    - name: kc-service
+    - group: ''	
+      kind: Service
+      name: kc-service
       port: 8080
+      weight: 1

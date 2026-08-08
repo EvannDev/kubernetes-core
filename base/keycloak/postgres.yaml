@@ -27,10 +27,16 @@ spec:
   data:
   - secretKey: username
     remoteRef:
+      conversionStrategy: Default	
+      decodingStrategy: None
+      metadataPolicy: None
       key: keycloak-db
       property: username
   - secretKey: password
     remoteRef:
+      conversionStrategy: Default	
+      decodingStrategy: None
+      metadataPolicy: None
       key: keycloak-db
       property: password
 ---
@@ -97,7 +103,9 @@ spec:
         - name: data
           mountPath: /var/lib/postgresql/data
   volumeClaimTemplates:
-  - metadata:
+  - apiVersion: v1	
+    kind: PersistentVolumeClaim
+    metadata:
       name: data
     spec:
       accessModes: ["ReadWriteOnce"]

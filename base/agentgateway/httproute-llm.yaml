@@ -19,5 +19,6 @@ spec:
     backendRefs:
     - name: openai
       namespace: agentgateway-system
+      weight: 1
       group: agentgateway.dev
       kind: AgentgatewayBackend
