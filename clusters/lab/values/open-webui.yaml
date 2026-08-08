@@ -34,6 +34,32 @@ extraEnvVars:
       }
     }
 
+# ── Une seule couche d'autorisation sur les modèles : la passerelle ──────────
+# Open WebUI possède SON PROPRE contrôle d'accès aux modèles (table
+# AccessGrants, visibilité Public/Private dans le panneau d'administration).
+# Un modèle découvert depuis une connexion n'est PAS lisible par un
+# non-administrateur tant qu'aucun grant n'existe — d'où « aucun modèle »
+# pour bob alors que la passerelle lui renvoyait bien gpt-4o-mini.
+#
+# La doc le dit d'ailleurs pour les modèles dérivés : « If the user cannot
+# access the base model, the request fails with "Model not found", even when
+# the workspace model itself is shared publicly with them. »
+#
+# On DÉLÈGUE donc explicitement l'autorisation à AgentGateway, qui la fait déjà
+# par utilisateur et par groupe (model_list_response filtre sur
+# model_authorized). Deux couches empilées, ce n'est pas de la défense en
+# profondeur ici : c'est une seconde source de vérité, non versionnée, stockée
+# dans une base — exactement ce que ce dépôt cherche à supprimer.
+#
+# Ce que ça change concrètement : Open WebUI n'ajoute plus de filtre par-dessus
+# la liste reçue. Chaque utilisateur voit exactement ce que la passerelle lui
+# renvoie, ni plus, ni moins.
+#
+# Ce que ça NE fait PAS : ouvrir l'accès à tout le monde. L'authentification
+# reste exigée, et la passerelle refuse toujours gpt-4o à bob.
+- name: BYPASS_MODEL_ACCESS_CONTROL
+  value: "true"
+
 # ── GitOps ───────────────────────────────────────────────────────────────────
 # Sans ça, Open WebUI ne lit les variables d'environnement qu'au PREMIER
 # démarrage puis les recopie en base : modifier ce fichier n'aurait plus aucun
