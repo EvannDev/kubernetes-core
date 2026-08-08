@@ -13,3 +13,21 @@ patches:
     - op: replace
       path: /spec/hostnames/0
       value: argocd.127.0.0.1.nip.io
+
+# Le listener passe de 80 à 8080 pour ce cluster.
+#
+# En mode host network (cf. clusters/lab/values/cilium.yaml), Envoy bind le port
+# du listener sur le réseau du nœud. Sous 1024 il faudrait lui accorder
+# NET_BIND_SERVICE ; 8080 évite cette complication, et c'est le port que kind
+# publie vers localhost (extraPortMappings).
+#
+# Gateway API compare le Host SANS le port : les hostnames des HTTPRoute
+# restent inchangés.
+- target:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: platform
+  patch: |
+    - op: replace
+      path: /spec/listeners/0/port
+      value: 8080

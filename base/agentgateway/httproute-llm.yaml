@@ -5,7 +5,9 @@ metadata:
   namespace: agentgateway-system
 spec:
   parentRefs:
-  - name: ai
+  - group: gateway.networking.k8s.io	
+    kind: Gateway
+    name: ai
     namespace: agentgateway-system
     sectionName: http
   rules:

@@ -1,12 +1,22 @@
 # Cluster kind pour le lab.
 #
-# Deux réglages non négociables :
-#  - disableDefaultCNI : sinon kindnet est installé et Cilium ne peut pas prendre
-#    la main proprement ;
-#  - kubeProxyMode: none : on utilise kubeProxyReplacement de Cilium.
+# Trois réglages non négociables :
+#  - disableDefaultCNI : sinon kindnet est installé et Cilium ne peut pas
+#    prendre la main proprement ;
+#  - kubeProxyMode: none : on utilise kubeProxyReplacement de Cilium ;
+#  - extraPortMappings 8080 : le seul chemin d'accès depuis macOS.
 #
-# Conséquence : le cluster reste NotReady jusqu'à ce que Cilium soit déployé.
-# C'est normal.
+# Conséquence du premier point : le cluster reste NotReady jusqu'à ce que Cilium
+# soit déployé. C'est normal.
+#
+# Sur le port 8080 : Cilium expose la Gateway de plateforme en mode host network
+# (cf. clusters/lab/values/cilium.yaml), donc Envoy écoute sur le réseau du
+# nœud — c'est-à-dire dans le conteneur kind. Sans ce mapping, rien n'est
+# joignable depuis macOS : le réseau Docker (172.18.0.0/16) n'est pas routable
+# depuis l'hôte sur Docker Desktop.
+#
+# extraPortMappings ne peut pas être ajouté après coup : changer ce fichier
+# impose un `make down && make up`.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: kind
@@ -15,8 +25,13 @@ networking:
   kubeProxyMode: none
 nodes:
 - role: control-plane
-  # Accès direct depuis l'hôte, en complément du port-forward.
   extraPortMappings:
-  - containerPort: 30080
-    hostPort: 30080
+  # Gateway de plateforme (classe cilium) : Argo CD et Keycloak.
+  - containerPort: 8080
+    hostPort: 8080
+    protocol: TCP
+  # Réservé si un jour on expose aussi la Gateway IA en host network plutôt que
+  # par port-forward.
+  - containerPort: 8081
+    hostPort: 8081
     protocol: TCP

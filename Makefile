@@ -119,12 +119,22 @@ status: ## Etat des Applications, dans l'ordre des waves
 	  -o custom-columns='WAVE:.metadata.annotations.argocd\.argoproj\.io/sync-wave,NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status' \
 	  | (read -r h; echo "$$h"; sort -n)
 
-port-forward: ## Expose la Gateway de plateforme sur localhost:8080
-	@echo ">> Argo CD  : http://$(ARGOCD_HOST)"
-	@echo ">> Keycloak : http://$(KC_HOST)  (alice/alice, bob/bob)"
-	kubectl -n platform-gateway port-forward svc/cilium-gateway-platform 8080:80
+urls: ## Vérifie la Gateway de plateforme et affiche les URLs
+	@echo ">> Gateway de plateforme (classe cilium, host network + extraPortMappings) :"
+	@kubectl -n platform-gateway get gateway platform \
+	  -o custom-columns='NAME:.metadata.name,CLASS:.spec.gatewayClassName,PROGRAMMED:.status.conditions[?(@.type=="Programmed")].status' 2>/dev/null || true
+	@echo
+	@echo "   Argo CD  : http://$(ARGOCD_HOST)"
+	@echo "   Keycloak : http://$(KC_HOST)   (alice/alice, bob/bob)"
+	@echo
+	@echo ">> Aucun port-forward n'est nécessaire ni possible ici : en mode host"
+	@echo "   network, Cilium ne crée pas de Service LoadBalancer, et son Service"
+	@echo "   n'a de toute façon aucun pod derrière lui (endpoint sentinelle du"
+	@echo "   datapath BPF). Envoy écoute sur le nœud, kind publie 8080."
+	@echo
+	@echo ">> Gateway IA : make port-forward-ai (celle-là est un Deployment normal)"
 
-port-forward-ai: ## Expose la Gateway IA sur localhost:8081
+port-forward-ai: ## Expose la Gateway IA sur localhost:8081 (Deployment classique)
 	kubectl -n agentgateway-system port-forward svc/ai 8081:80
 
 admin-password: ## Mot de passe admin local d'Argo CD (issue de secours)
@@ -155,5 +165,5 @@ down: ## Supprime le cluster kind
 
 .PHONY: help validate waves kind-up install-gateway-api install-cilium \
         install-argocd seed-secrets bootstrap up adopt-check \
-        status port-forward port-forward-ai admin-password token demo-mcp \
+        status urls port-forward-ai admin-password token demo-mcp \
         demo-mcp-anonymous down

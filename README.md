@@ -15,8 +15,16 @@ outil** est décidé par un JWT Keycloak et une expression déclarée dans Git.
 make up            # les 6 étapes d'amorçage, dans l'ordre
 make status        # avancement des Applications, dans l'ordre des waves
 make adopt-check   # les composants amorcés sont-ils bien adoptés sans écart ?
-make port-forward  # http://argocd.127.0.0.1.nip.io:8080  et  keycloak.127.0.0.1.nip.io:8080
+make urls          # vérifie la Gateway et affiche les URLs
 ```
+
+- Argo CD : <http://argocd.127.0.0.1.nip.io:8080>
+- Keycloak : <http://keycloak.127.0.0.1.nip.io:8080>
+- Gateway IA : `make port-forward-ai` → `localhost:8081`
+
+Aucun `port-forward` pour les deux premières : Cilium expose la Gateway de
+plateforme en **mode host network** et kind publie le port 8080 vers localhost.
+Détail et raisons dans [ARCHITECTURE.md](ARCHITECTURE.md) §9.
 
 ### L'amorçage ne peut pas être du GitOps
 

@@ -265,6 +265,77 @@ Corollaire : `make install-gateway-api` applique `experimental-install.yaml` et
 l'`Application` pointe sur `config/crd/experimental`. Les deux doivent rester
 alignés, sinon l'adoption au wave -20 se solde par un `OutOfSync`.
 
+### 8.1 Comment on atteint réellement ces Gateway depuis un Mac
+
+Le sujet paraît trivial et ne l'est pas ; il vaut une diapositive parce qu'il
+révèle une différence de nature entre les deux implémentations.
+
+**La Gateway `agentgateway` est un Deployment ordinaire.** Le contrôleur
+provisionne un Deployment et un Service avec de vrais pods derrière. Un
+`kubectl port-forward svc/ai 8081:80` fonctionne donc sans rien de particulier —
+c'est ce que fait `make port-forward-ai`.
+
+**La Gateway `cilium`, non.** Cilium ne déploie pas de proxy dédié : le trafic
+est traité par le DaemonSet `cilium-envoy`, qui tourne en host network, et le
+service est programmé dans le datapath BPF. Le Service `cilium-gateway-platform`
+n'a aucun pod derrière lui ; son EndpointSlice contient un endpoint sentinelle :
+
+```
+NAME                      ADDRESSTYPE   PORTS   ENDPOINTS
+cilium-gateway-platform   IPv4          9999    192.192.192.192
+```
+
+`kubectl port-forward` cherche un pod, n'en trouve pas, et échoue. Ce n'est pas
+un bug : c'est la conséquence de la façon dont Cilium implémente le load
+balancing.
+
+Restait le Service `LoadBalancer`. Sur kind il n'y a pas de cloud provider ;
+avec `cloud-provider-kind` une IP est bien attribuée, mais elle appartient au
+réseau Docker (`172.18.0.0/16`) — non routable depuis macOS sur Docker Desktop,
+où le démon tourne dans une VM.
+
+**Solution retenue : le mode host network de Cilium.**
+
+```yaml
+# clusters/lab/values/cilium.yaml
+gatewayAPI:
+  hostNetwork:
+    enabled: true
+    nodes:
+      matchLabels: {}     # tous les nœuds ; on ciblerait l'infra sur un vrai cluster
+```
+
+```yaml
+# kind-cluster.yaml
+extraPortMappings:
+- containerPort: 8080
+  hostPort: 8080
+```
+
+Envoy écoute alors sur le réseau du nœud — c'est-à-dire dans le conteneur
+kind — et kind publie ce port vers `localhost`. Aucun binaire supplémentaire,
+comportement identique sur macOS et Linux.
+
+Deux points documentés à connaître :
+
+- **host network et Service LoadBalancer sont mutuellement exclusifs.** Cilium
+  crée un Service `NodePort` à la place. Le Service `LoadBalancer` disparaît, et
+  avec lui la question du port-forward.
+- **Un listener sous le port 1024** exigerait
+  `envoy.securityContext.capabilities.keepCapNetBindService=true` et la
+  capability `NET_BIND_SERVICE`. On écoute donc sur **8080**, ce qui tombe bien :
+  c'est déjà le port présent dans toutes les URLs du lab (`configs.cm.url`,
+  issuer OIDC, `spec.hostname` de Keycloak, redirect URIs du realm).
+
+Le port du listener est un **patch d'overlay**
+(`clusters/lab/platform-gateway/`), pas une valeur de `base/` : sur un cluster
+avec un vrai LoadBalancer, on supprime le bloc `hostNetwork` et le listener
+reste sur 80/443. Rien d'autre ne bouge — Gateway API compare le `Host` sans le
+port, donc les `hostnames` des HTTPRoute sont inchangés.
+
+`extraPortMappings` ne pouvant pas être ajouté à un cluster kind existant,
+changer ce port impose un `make down && make up`.
+
 La `GatewayClass` elle-même n'est pas dans Git : le contrôleur AgentGateway la
 crée à partir des valeurs Helm `gatewayClassName` / `controllerName`. La
 déclarer aussi dans un `Application` avec `prune: true` + `selfHeal: true`

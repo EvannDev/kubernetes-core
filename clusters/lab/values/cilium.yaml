@@ -8,7 +8,37 @@
 k8sServiceHost: kind-control-plane
 k8sServicePort: 6443
 
-# Mono-nœud : pas de raison de payer un DaemonSet Envoy dédié ni de la HA.
+# Exposition de la Gateway API en mode HOST NETWORK.
+#
+# Sur kind il n'y a pas de cloud provider, donc pas de vrai LoadBalancer. Et
+# même avec cloud-provider-kind, l'IP attribuée vit dans le réseau Docker
+# (172.18.0.0/16), qui n'est pas routable depuis macOS.
+#
+# En mode host network, Envoy écoute directement sur le réseau du nœud, et kind
+# publie ce port vers localhost (extraPortMappings dans kind-cluster.yaml).
+# C'est déterministe, sans binaire supplémentaire et identique sur macOS et Linux.
+#
+# Deux conséquences documentées :
+#  - host network et Service LoadBalancer sont MUTUELLEMENT EXCLUSIFS : Cilium
+#    crée un Service NodePort à la place. Il n'y a donc plus de Service
+#    "cilium-gateway-platform" de type LoadBalancer, et plus rien à
+#    port-forwarder (son EndpointSlice ne contenait de toute façon que
+#    l'endpoint sentinelle 192.192.192.192:9999 du datapath BPF).
+#  - un listener sous le port 1024 exigerait
+#    envoy.securityContext.capabilities.keepCapNetBindService=true ; on écoute
+#    donc sur 8080 (cf. l'overlay clusters/lab/platform-gateway).
+#
+# Sur un cluster avec un vrai LoadBalancer : supprimer ce bloc, remettre le
+# listener sur 80/443, et rien d'autre ne change.
+gatewayAPI:
+  hostNetwork:
+    enabled: true
+    nodes:
+      # Sélecteur vide = tous les nœuds. Sur un vrai cluster on ciblerait
+      # les nœuds d'infrastructure.
+      matchLabels: {}
+
+# Mono-nœud : pas de raison de payer de la HA.
 hubble:
   relay:
     replicas: 1
