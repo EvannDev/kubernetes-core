@@ -1,27 +1,40 @@
----
-# base/platform-gateway/httproute-hubble.yaml
+# Hubble UI — exposée via la Gateway de plateforme.
+#
+# La route vit dans kube-system parce que c'est LE SERVICE qui l'impose :
+# en Gateway API un backendRef est local au namespace de la route. Le parentRef,
+# lui, traverse les namespaces (c'est la Gateway qui autorise, via
+# allowedRoutes.namespaces.from: All).
+#
+# ATTENTION : Hubble UI n'a AUCUNE authentification. L'exposer, c'est offrir la
+# carte complète des flux réseau du cluster à qui atteint la Gateway. Acceptable
+# en lab, à décider consciemment ailleurs.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: hubble
-  namespace: kube-system        # imposé par le Service, pas par la Gateway
+  namespace: kube-system
 spec:
   parentRefs:
-  - group: gateway.networking.k8s.io	
+  - group: gateway.networking.k8s.io
     kind: Gateway
     name: platform
     namespace: platform-gateway
     sectionName: http
+  # PLACEHOLDER : surchargé par cluster.
   hostnames:
-  - hubble.example.com          # PLACEHOLDER, patché par cluster
+  - hubble.example.com
   rules:
   - matches:
     - path:
         type: PathPrefix
         value: /
     backendRefs:
-    - group: ''	
+    # port = le port du SERVICE (80), surtout pas le targetPort (8081).
+    # Le Service hubble-ui expose : port 80 -> targetPort 8081.
+    # Piège : Cilium répond ResolvedRefs=True même avec un port inexistant — il
+    # vérifie que le Service existe, pas que le port existe. L'erreur ne se voit
+    # donc qu'à l'exécution, sous forme de 503.
+    - group: ""
       kind: Service
       name: hubble-ui
-      port: 8081
-      weight: 1
+      port: 80
