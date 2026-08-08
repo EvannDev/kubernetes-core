@@ -5,3 +5,4 @@ resources:
 - namespace.yaml
 - gateway.yaml
 - httproute-argocd.yaml
+- httproute-hubble.yaml
