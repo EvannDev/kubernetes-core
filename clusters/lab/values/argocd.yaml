@@ -1,0 +1,32 @@
+# Valeurs argo-cd propres au cluster "lab".
+#
+# Les URLs utilisent nip.io (résolution DNS wildcard vers 127.0.0.1) et le port
+# 8080 parce que le lab expose la Gateway via un simple port-forward :
+#   kubectl -n platform-gateway port-forward svc/cilium-gateway-platform 8080:80
+#
+# Sur un vrai cluster : remplacer par le domaine réel, mettre https, et
+# supprimer le port.
+global:
+  domain: argocd.127.0.0.1.nip.io
+
+configs:
+  cm:
+    # ATTENTION : le chart calcule un preset url = "https://<global.domain>".
+    # Il FAUT l'écraser en http pour le lab, sinon la redirection OIDC casse.
+    # C'est la cause n°1 des "SSO ne s'affiche pas" (FAQ Argo CD).
+    url: http://argocd.127.0.0.1.nip.io:8080
+
+    # Client PUBLIC + PKCE : aucun client secret à gérer, donc rien à
+    # provisionner dans argocd-secret et aucun secret dans Git.
+    # Variante client confidentiel + External Secrets : cf. ARCHITECTURE.md.
+    oidc.config: |
+      name: Keycloak
+      issuer: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
+      clientID: argocd
+      enablePKCEAuthentication: true
+      requestedScopes:
+      - openid
+      - profile
+      - email
+      - groups
+      refreshTokenThreshold: 2m

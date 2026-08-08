@@ -1,0 +1,61 @@
+# Argo CD se gère lui-même.
+#
+# Amorçage : le Makefile installe une première fois le chart avec les MÊMES
+# version et valeurs (make install-argocd), puis `kubectl apply -k bootstrap/`
+# crée cette Application qui reprend la main. A partir de là, toute évolution
+# d'Argo CD (montée de version incluse) passe par une pull request.
+#
+# ServerSideApply=true est OBLIGATOIRE et documenté comme tel : le CRD
+# ApplicationSet dépasse la limite de 262 kB du client-side apply.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+  - repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-cd
+    targetRevision: 10.3.0
+    helm:
+      releaseName: argocd
+      valueFiles:
+      - $values/base/argocd/values.yaml
+      - $values/clusters/lab/values/argocd.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  # argocd-server écrit lui-même server.secretkey et le hash du mot de passe
+  # admin dans argocd-secret. Sans ces exclusions, selfHeal et le serveur se
+  # disputent le Secret en boucle.
+  ignoreDifferences:
+  - group: ""
+    kind: Secret
+    name: argocd-secret
+    jsonPointers:
+    - /data/server.secretkey
+    - /data/admin.password
+    - /data/admin.passwordMtime
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

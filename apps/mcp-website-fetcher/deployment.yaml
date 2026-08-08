@@ -1,0 +1,27 @@
+# Serveur MCP de démonstration : expose un outil "fetch".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-website-fetcher
+  namespace: mcp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-website-fetcher
+  template:
+    metadata:
+      labels:
+        app: mcp-website-fetcher
+    spec:
+      containers:
+      - name: mcp-website-fetcher
+        image: ghcr.io/peterj/mcp-website-fetcher:main
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi

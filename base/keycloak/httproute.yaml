@@ -1,0 +1,25 @@
+# La HTTPRoute vit dans le namespace du Service qu'elle expose (règle Gateway
+# API : backendRef doit être local, sinon il faut un ReferenceGrant).
+# Elle s'attache à la Gateway de plateforme, de classe "cilium".
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  parentRefs:
+  - name: platform
+    namespace: platform-gateway
+    sectionName: http
+  # PLACEHOLDER : surchargé par cluster.
+  hostnames:
+  - keycloak.example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    # Nom du Service créé par l'opérateur : <nom du CR Keycloak>-service
+    - name: kc-service
+      port: 8080

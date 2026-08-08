@@ -1,0 +1,22 @@
+# Cluster kind pour le lab.
+#
+# Deux réglages non négociables :
+#  - disableDefaultCNI : sinon kindnet est installé et Cilium ne peut pas prendre
+#    la main proprement ;
+#  - kubeProxyMode: none : on utilise kubeProxyReplacement de Cilium.
+#
+# Conséquence : le cluster reste NotReady jusqu'à ce que Cilium soit déployé.
+# C'est normal.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kind
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+- role: control-plane
+  # Accès direct depuis l'hôte, en complément du port-forward.
+  extraPortMappings:
+  - containerPort: 30080
+    hostPort: 30080
+    protocol: TCP

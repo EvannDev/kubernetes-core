@@ -1,0 +1,61 @@
+# Un seul ApplicationSet pour tout le parc : il découvre les clusters en
+# listant les fichiers clusters/*/cluster.yaml.
+#
+# Ajouter un cluster = ajouter un dossier clusters/<nom>/ . Aucune modification
+# de ce fichier, ni du bootstrap.
+#
+# Il génère UNE Application "platform-<cluster>" de type app-of-apps qui pointe
+# sur clusters/<cluster>/platform/ . Le choix de l'app-of-apps (plutôt qu'un
+# ApplicationSet par composant) est délibéré : c'est le seul moyen d'obtenir un
+# ORDRE garanti entre les composants via argocd.argoproj.io/sync-wave
+# (les Applications générées par un ApplicationSet se synchronisent en parallèle).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: clusters
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    # Si un dossier clusters/<nom>/ disparaît, on supprime l'Application mais
+    # pas les workloads. Garde-fou sur un ApplicationSet de bootstrap.
+    preserveResourcesOnDeletion: true
+  generators:
+  - git:
+      repoURL: https://github.com/EvannDev/kubernetes-core.git
+      revision: main
+      files:
+      - path: clusters/*/cluster.yaml
+  template:
+    metadata:
+      name: 'platform-{{.name}}'
+      labels:
+        app.kubernetes.io/part-of: platform
+        cluster: '{{.name}}'
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/EvannDev/kubernetes-core.git
+        targetRevision: main
+        path: 'clusters/{{.name}}/platform'
+      destination:
+        # Cette Application ne contient QUE des Application CR et des
+        # ApplicationSet : ils vivent toujours dans argocd, sur le cluster qui
+        # héberge Argo CD. Les composants ciblent ensuite {{.server}}.
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m

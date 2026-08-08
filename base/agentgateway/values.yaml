@@ -1,0 +1,21 @@
+# Valeurs agentgateway COMMUNES.
+#
+# La GatewayClass n'est PAS déclarée en YAML : le contrôleur la crée lui-même à
+# partir de ces deux valeurs. Les laisser vides = valeurs par défaut
+# ("agentgateway" / "agentgateway.dev/agentgateway"). Ne les changer que pour
+# faire tourner plusieurs contrôleurs agentgateway côte à côte.
+gatewayClassName: ""
+controllerName: ""
+
+controller:
+  logLevel: info
+
+# Le chart embarque un PodMonitor pour scraper les pods du data plane
+# (port 15020). A activer avec kube-prometheus-stack.
+# Attention : namespaceSelector vaut par défaut le namespace de la release —
+# si des Gateway vivent ailleurs, il faut l'élargir.
+podMonitor:
+  proxy:
+    enabled: false
+    gatewayClassNames:
+    - agentgateway

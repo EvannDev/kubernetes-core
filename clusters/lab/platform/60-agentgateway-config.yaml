@@ -1,0 +1,38 @@
+# Configuration AgentGateway : la Gateway IA, le backend LLM et les policies de
+# gouvernance (JWT, autorisation CEL, quota, access logs).
+#
+# Séparée du chart pour deux raisons :
+#  1. les CRD et le contrôleur doivent exister avant ces objets ;
+#  2. le Deployment et le Service du data plane sont générés PAR le contrôleur à
+#     partir de la Gateway : ils ne sont pas dans Git et n'ont pas à l'être.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: gateway
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/agentgateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agentgateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

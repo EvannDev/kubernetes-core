@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# App-of-apps du cluster "lab".
+#
+# Pourquoi un app-of-apps plutôt qu'un ApplicationSet par composant ?
+# Parce que l'ORDRE compte : les CRD Gateway API avant Cilium, Cilium avant
+# tout le reste, l'opérateur Keycloak avant le CR Keycloak, les CRD
+# agentgateway avant ses policies. Les annotations sync-wave n'ordonnent que les
+# ressources d'UNE MÊME synchronisation : les Applications générées par un
+# ApplicationSet, elles, partent toutes en parallèle.
+#
+# Les numéros de fichier reprennent les sync-waves pour que l'ordre soit lisible
+# dans un simple `ls`.
+namespace: argocd
+
+resources:
+- 00-gateway-api.yaml
+- 10-cilium.yaml
+- 20-external-secrets.yaml
+- 25-external-secrets-config.yaml
+- 30-argocd.yaml
+- 40-keycloak-operator.yaml
+- 45-keycloak.yaml
+- 50-agentgateway-crds.yaml
+- 55-agentgateway.yaml
+- 60-agentgateway-config.yaml
+- 70-platform-gateway.yaml
+- 90-apps.yaml
+
+labels:
+- includeSelectors: false
+  pairs:
+    cluster: lab

@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Ce kustomization est appliqué DEUX fois :
+#   1. une fois à la main au bootstrap  (kubectl apply -k bootstrap/)
+#   2. ensuite en continu par l'Application "root" ci-dessous
+# C'est ce qui rend le plan de contrôle GitOps auto-géré et idempotent.
+resources:
+- ../projects
+- root.yaml
+- applicationset-clusters.yaml

@@ -1,0 +1,34 @@
+# Gateway de plateforme (classe cilium) + HTTPRoute Argo CD.
+# Wave tardive : les namespaces argocd et keycloak doivent déjà exister, et
+# argocd-server / kc-service doivent être là pour que les routes soient utiles.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: network
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/platform-gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-gateway
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

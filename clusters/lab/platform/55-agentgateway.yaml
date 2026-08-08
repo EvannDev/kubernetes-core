@@ -1,0 +1,41 @@
+# Plan de contrôle AgentGateway. C'est LUI qui crée et possède la GatewayClass
+# "agentgateway" — elle n'est donc pas dans Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: gateway
+  sources:
+  - repoURL: cr.agentgateway.dev/charts
+    chart: agentgateway
+    targetRevision: v1.4.1
+    helm:
+      releaseName: agentgateway
+      skipCrds: false
+      valueFiles:
+      - $values/base/agentgateway/values.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agentgateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

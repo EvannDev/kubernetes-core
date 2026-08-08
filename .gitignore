@@ -1,0 +1,6 @@
+# Rien de sensible ne doit jamais atterrir ici.
+*.env
+*.key
+*.pem
+secrets.local.*
+.DS_Store

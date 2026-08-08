@@ -1,0 +1,31 @@
+# Traçabilité au niveau de la Gateway : sans dépendance externe (pas de
+# collecteur OTel requis pour les access logs).
+#
+# Pour les traces distribuées, ajouter un bloc frontend.tracing pointant sur un
+# collecteur OTel (protocol: GRPC, port 4317) — volontairement absent ici pour
+# ne pas créer une dépendance non déployée.
+#
+# Les métriques utiles côté coût sont exposées par le data plane sur :15020
+#   agentgateway_gen_ai_client_token_usage{gen_ai_token_type="input|output",
+#                                          gen_ai_request_model=...}
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ai-observability
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+
+  frontend:
+    accessLog:
+      attributes:
+        add:
+        - name: jwt.subject
+          expression: 'jwt.sub'
+        - name: jwt.groups
+          expression: 'jwt.groups'
+        - name: http.route
+          expression: 'request.path'

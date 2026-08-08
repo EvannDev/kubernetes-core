@@ -1,0 +1,30 @@
+# Gateway de PLATEFORME — classe "cilium".
+#
+# Deux GatewayClass cohabitent volontairement dans ce cluster :
+#   cilium       -> trafic north-south classique (UI Argo CD, Keycloak)
+#   agentgateway -> trafic IA (LLM, MCP, A2A), là où vit la gouvernance
+#
+# La coexistence est propre parce que :
+#  - aucun des deux contrôleurs n'installe les CRD Gateway API (un seul
+#    propriétaire : l'Application "gateway-api") ;
+#  - les controllerName sont disjoints (io.cilium/gateway-controller vs
+#    agentgateway.dev/agentgateway) donc chacun ignore les Gateway de l'autre.
+#
+# Cilium crée le Service LoadBalancer "cilium-gateway-platform" dans ce
+# namespace. Sans cloud provider (kind), il reste en <pending> : on l'atteint
+# par port-forward (cf. Makefile) ou via cloud-provider-kind / L2 announcements.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: platform
+  namespace: platform-gateway
+spec:
+  gatewayClassName: cilium
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        # Les HTTPRoute vivent avec leur Service, donc dans d'autres namespaces.
+        from: All

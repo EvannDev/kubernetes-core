@@ -1,0 +1,41 @@
+# Opérateur Keycloak (officiel, keycloak-k8s-resources).
+#
+# Le dossier kubernetes/ du dépôt contient un kustomization.yml (extension .yml,
+# reconnue par Argo CD) qui applique les 4 CRD + le déploiement de l'opérateur et
+# repositionne le sujet du ClusterRoleBinding via un NamespaceTransformer.
+# Ne PAS appliquer kubernetes.yml seul : le binding pointerait sur un mauvais
+# ServiceAccount si le namespace change.
+#
+# ServerSideApply obligatoire : keycloaks CRD ~520 kB, keycloakrealmimports ~430 kB.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: identity
+  source:
+    repoURL: https://github.com/keycloak/keycloak-k8s-resources.git
+    targetRevision: "26.7.1"
+    path: kubernetes
+  destination:
+    server: https://kubernetes.default.svc
+    # Doit correspondre au `namespace: keycloak` du kustomization.yml upstream.
+    namespace: keycloak
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

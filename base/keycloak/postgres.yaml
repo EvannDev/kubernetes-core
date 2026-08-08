@@ -1,0 +1,106 @@
+# Postgres minimal pour Keycloak.
+#
+# Pourquoi pas dev-file / H2 ? L'opérateur Keycloak lance toujours le serveur en
+# mode production et ne provisionne aucun PVC pour H2 : on perdrait le realm à
+# chaque redémarrage de pod — et comme KeycloakRealmImport ne réimporte pas un
+# realm existant, la démo deviendrait non déterministe.
+# 20 lignes de Postgres suppriment toute cette classe de problème.
+#
+# Pour un vrai cluster : CloudNativePG (ou la base managée du cloud) et on ne
+# garde que le bloc spec.db du CR Keycloak.
+---
+# Les identifiants ne sont PAS dans Git : ESO les projette depuis le
+# ClusterSecretStore "platform".
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: platform
+  target:
+    name: keycloak-db
+    creationPolicy: Owner
+  data:
+  - secretKey: username
+    remoteRef:
+      key: keycloak-db
+      property: username
+  - secretKey: password
+    remoteRef:
+      key: keycloak-db
+      property: password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  selector:
+    app: keycloak-db
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  serviceName: keycloak-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak-db
+  template:
+    metadata:
+      labels:
+        app: keycloak-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:17.6-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: keycloak
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-db
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-db
+              key: password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "keycloak", "-d", "keycloak"]
+          initialDelaySeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi

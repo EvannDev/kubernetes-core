@@ -1,0 +1,54 @@
+# LA démo qui fait comprendre le sujet en dix secondes.
+#
+# L'autorisation ne porte pas sur "l'accès au serveur MCP" mais sur l'OUTIL
+# appelé. Deux utilisateurs, le même serveur, deux permissions différentes —
+# décidées par un JWT Keycloak et une expression CEL versionnée dans Git.
+#
+# Variables CEL disponibles : jwt.sub, jwt.iss, n'importe quel claim (jwt.groups),
+# mcp.tool.name, source.address, request.path, request.host, request.headers[...],
+# response.code.
+#
+# Sémantique (vérifiée sur le schéma du CRD v1.4.1) : les matchExpressions d'une
+# même règle sont en ET. Pour un OU, on l'écrit en CEL avec ||.
+#
+# Note 1.4 : un refus en phase requête renvoie HTTP 200 avec un corps JSON-RPC
+# d'erreur (et non un code non-2xx).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-tool-rbac
+  namespace: mcp-demo
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: mcp-website-fetcher
+
+  # Authentification de la route MCP : même issuer que pour les LLM.
+  # (surchargé par cluster si besoin — ici on garde le même realm)
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
+        audiences:
+        - agentgateway
+        jwks:
+          remote:
+            backendRef:
+              name: kc-service
+              kind: Service
+              namespace: keycloak
+              port: 8080
+            jwksPath: /realms/platform/protocol/openid-connect/certs
+            cacheDuration: 5m
+
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+          # Les admins plateforme peuvent appeler n'importe quel outil ;
+          # tous les autres porteurs d'un token valide n'ont accès qu'à "fetch".
+          - 'jwt.groups.exists(g, g == "platform-admins") || mcp.tool.name == "fetch"'

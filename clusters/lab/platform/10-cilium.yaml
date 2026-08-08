@@ -1,0 +1,48 @@
+# Cilium — CNI + kube-proxy replacement + GatewayClass "cilium".
+#
+# Pattern multi-sources : le chart vient d'upstream, les valeurs viennent de CE
+# dépôt. C'est la réponse du ebook à "Keeping it DRY" + "Parameterize" sans
+# dupliquer le chart ni écrire de wrapper Helm.
+# L'ordre des valueFiles compte : base d'abord, cluster ensuite.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cilium
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: network
+  sources:
+  # Dépôt Helm HTTP classique, et non le miroir OCI quay.io/cilium/charts :
+  # c'est la même source que `helm repo add cilium https://helm.cilium.io`
+  # utilisée par `make install-cilium`. Amorcer et réconcilier depuis le MÊME
+  # artefact est ce qui rend l'adoption silencieuse.
+  - repoURL: https://helm.cilium.io
+    chart: cilium
+    targetRevision: 1.19.6
+    helm:
+      releaseName: cilium
+      valueFiles:
+      - $values/base/cilium/values.yaml
+      - $values/clusters/lab/values/cilium.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

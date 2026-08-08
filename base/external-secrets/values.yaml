@@ -1,0 +1,15 @@
+# Valeurs external-secrets COMMUNES.
+installCRDs: true
+
+replicaCount: 1
+
+webhook:
+  create: true
+  replicaCount: 1
+
+certController:
+  create: true
+  replicaCount: 1
+
+serviceMonitor:
+  enabled: false

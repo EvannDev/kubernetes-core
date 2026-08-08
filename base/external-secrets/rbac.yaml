@@ -1,0 +1,29 @@
+# Droits d'ESO dans le namespace source uniquement.
+# Le verbe selfsubjectrulesreviews/create n'est pas décoratif : ESO l'utilise
+# pour valider le SecretStore au démarrage. Sans lui, le store reste "not ready".
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eso-platform-secrets-reader
+  namespace: platform-secrets
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["selfsubjectrulesreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eso-platform-secrets-reader
+  namespace: platform-secrets
+subjects:
+- kind: ServiceAccount
+  name: eso-platform-reader
+  namespace: external-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eso-platform-secrets-reader

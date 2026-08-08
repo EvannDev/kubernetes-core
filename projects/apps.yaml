@@ -1,0 +1,40 @@
+# apps : les charges de travail (serveurs MCP, agents, démos). Volontairement
+# étroit : pas de droit sur les ressources cluster-scoped autres que Namespace,
+# pas d'accès aux namespaces de plateforme.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+spec:
+  description: Charges de travail applicatives (serveurs MCP, agents)
+
+  sourceRepos:
+  - https://github.com/EvannDev/kubernetes-core.git
+
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: mcp-demo
+
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+
+  namespaceResourceWhitelist:
+  - group: ""
+    kind: '*'
+  - group: apps
+    kind: '*'
+  - group: gateway.networking.k8s.io
+    kind: '*'
+  - group: agentgateway.dev
+    kind: '*'
+  - group: external-secrets.io
+    kind: '*'
+
+  # Interdire explicitement aux équipes applicatives de se donner des droits.
+  namespaceResourceBlacklist:
+  - group: rbac.authorization.k8s.io
+    kind: '*'

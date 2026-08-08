@@ -1,0 +1,15 @@
+# Le "coffre" du lab.
+#
+# En production, ce namespace n'existe pas : le ClusterSecretStore pointe sur
+# Vault / AWS Secrets Manager / GCP Secret Manager / 1Password. Ici on utilise
+# le provider "kubernetes" d'ESO, qui lit des Secrets d'un autre namespace.
+# L'intérêt pédagogique : le pattern ExternalSecret est EXACTEMENT le même,
+# seul le SecretStore change. Aucun secret n'est jamais commité dans Git.
+#
+# Les Secrets sources sont semés hors GitOps :  make seed-secrets
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-secrets
+  labels:
+    app.kubernetes.io/part-of: platform

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Les AppProjects sont la frontière de gouvernance d'Argo CD : ils répondent à
+# "qui peut déployer QUOI, DEPUIS OÙ, et VERS OÙ". On les crée en premier
+# (sync-wave -100) pour que les Applications aient un projet valide.
+resources:
+- platform.yaml
+- network.yaml
+- identity.yaml
+- gateway.yaml
+- apps.yaml

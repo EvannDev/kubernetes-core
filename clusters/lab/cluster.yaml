@@ -1,0 +1,14 @@
+# Fiche d'identité du cluster. C'est CE fichier que l'ApplicationSet
+# "clusters" (bootstrap/) découvre : ajouter un cluster = ajouter un dossier
+# clusters/<nom>/ contenant un cluster.yaml et un dossier platform/.
+#
+# Les champs sont libres ; seul "name" est utilisé par le template de
+# l'ApplicationSet. Les autres documentent le cluster et servent de référence
+# unique quand on écrit les overlays.
+name: lab
+server: https://kubernetes.default.svc
+distribution: kind
+domain: 127.0.0.1.nip.io
+# Port du port-forward vers la Gateway de plateforme (lab sans LoadBalancer).
+externalPort: 8080
+description: Cluster de démonstration Lunch and Learn - gouvernance IA

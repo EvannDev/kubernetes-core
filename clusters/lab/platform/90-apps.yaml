@@ -1,0 +1,50 @@
+# Frontière plateforme / applications.
+#
+# Ici on passe la main : un ApplicationSet découvre les dossiers apps/* et
+# génère une Application par charge de travail, dans le projet "apps" (droits
+# volontairement étroits). Les équipes applicatives déposent un dossier, elles
+# ne touchent jamais à clusters/ ni à base/.
+#
+# Pas de sync-wave utile entre les apps générées : elles sont indépendantes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps-lab
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+  - git:
+      repoURL: https://github.com/EvannDev/kubernetes-core.git
+      revision: main
+      directories:
+      - path: apps/*
+  template:
+    metadata:
+      name: '{{.path.basename}}'
+      labels:
+        app.kubernetes.io/part-of: apps
+        cluster: lab
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: apps
+      source:
+        repoURL: https://github.com/EvannDev/kubernetes-core.git
+        targetRevision: main
+        path: '{{.path.path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: mcp-demo
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - ServerSideApply=true
+        - CreateNamespace=true

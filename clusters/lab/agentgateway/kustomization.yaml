@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../../base/agentgateway
+
+patches:
+# L'issuer attendu par la passerelle doit correspondre EXACTEMENT au claim "iss"
+# des tokens émis par Keycloak, donc à spec.hostname.hostname du CR Keycloak.
+# C'est la cause n°1 des 401 inexplicables.
+- target:
+    group: agentgateway.dev
+    kind: AgentgatewayPolicy
+    name: llm-governance
+  patch: |
+    - op: replace
+      path: /spec/traffic/jwtAuthentication/providers/0/issuer
+      value: http://keycloak.127.0.0.1.nip.io:8080/realms/platform

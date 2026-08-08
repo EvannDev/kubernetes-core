@@ -1,0 +1,55 @@
+# CR Keycloak.
+#
+# Pièges de version, vérifiés sur keycloak-k8s-resources 26.7.1 :
+#  - la version de stockage est v2beta1 depuis 26.6.0 (v2alpha1 encore servie
+#    mais dépréciée) ;
+#  - spec.hostname est un OBJET, pas une chaîne (changement 24 -> 26) ;
+#  - le champ est spec.hostname.strict — strictHttps n'existe plus ;
+#  - spec.proxy.headers a remplacé l'ancien mode proxy edge/reencrypt ;
+#  - l'opérateur lance toujours "start" (mode production) : il FAUT fournir
+#    spec.hostname.hostname ou spec.hostname.strict: false, sinon le pod ne
+#    démarre pas.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: kc
+  namespace: keycloak
+spec:
+  instances: 1
+
+  db:
+    vendor: postgres
+    host: keycloak-db
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db
+      key: username
+    passwordSecret:
+      name: keycloak-db
+      key: password
+
+  http:
+    # Pas de certificat dans le lab : TLS terminé par la Gateway.
+    httpEnabled: true
+
+  hostname:
+    # PLACEHOLDER : surchargé par cluster (clusters/<cluster>/keycloak).
+    # Doit correspondre EXACTEMENT à l'issuer configuré côté Argo CD et côté
+    # AgentgatewayPolicy, sinon la validation du claim "iss" échoue.
+    hostname: http://keycloak.example.com
+    strict: false
+
+  proxy:
+    # Faire confiance aux en-têtes X-Forwarded-* posés par la Gateway.
+    headers: xforwarded
+
+  ingress:
+    # On expose via Gateway API (HTTPRoute), pas via un Ingress.
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      memory: 1500Mi

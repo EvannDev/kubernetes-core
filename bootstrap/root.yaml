@@ -1,0 +1,39 @@
+# Application "root" : le seul objet Argo CD que l'on applique à la main.
+#
+#   kubectl apply -k bootstrap/
+#
+# Elle pointe sur le dossier bootstrap/ (donc sur elle-même) : à partir de là
+# Argo CD gère son propre plan de contrôle GitOps — les AppProjects et
+# l'ApplicationSet qui découvre les clusters. Plus aucun kubectl n'est requis.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: bootstrap
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    # Les CRD Argo CD (ApplicationSet) dépassent la limite de 262 kB de
+    # l'annotation last-applied-configuration du client-side apply.
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: mcp-demo
+
+resources:
+- deployment.yaml
+- service.yaml
+- backend.yaml
+- httproute.yaml
+- policy-tool-rbac.yaml
+
+# `labels` et non `commonLabels` : commonLabels injecte aussi le label dans les
+# selectors, or spec.selector d'un Deployment est IMMUTABLE. Une évolution du
+# label casserait alors toute mise à jour.
+labels:
+- includeSelectors: false
+  pairs:
+    app.kubernetes.io/name: mcp-website-fetcher

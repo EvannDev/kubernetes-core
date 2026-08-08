@@ -1,0 +1,145 @@
+# Realm "platform" : la source d'identité de la plateforme.
+#
+# LIMITE IMPORTANTE de KeycloakRealmImport : le CR ne fait que CRÉER. Si le
+# realm existe déjà côté Keycloak, il n'est PAS mis à jour. Modifier ce fichier
+# et laisser Argo CD synchroniser est donc un no-op sur un realm déjà importé.
+# Pour itérer : supprimer le realm dans Keycloak (ou le PVC Postgres) et laisser
+# le Job d'import se relancer.
+# Alternatives réconciliantes, cf. ARCHITECTURE.md :
+#   - keycloak-config-cli en Job PostSync (réconciliation complète)
+#   - les CR KeycloakOIDCClient / KeycloakSAMLClient (nouveaux en 26.7, expérimentaux)
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
+metadata:
+  name: platform
+  namespace: keycloak
+spec:
+  keycloakCRName: kc
+  realm:
+    realm: platform
+    displayName: Platform
+    enabled: true
+    sslRequired: none          # LAB uniquement : mettre "external" ailleurs.
+    registrationAllowed: false
+
+    # --- Groupes : la seule source d'autorisation -----------------------------
+    # Repris tels quels dans le claim "groups" et donc dans policy.csv d'Argo CD
+    # et dans les expressions CEL d'AgentGateway.
+    groups:
+    - name: platform-admins
+    - name: platform-viewers
+
+    # --- Client scopes --------------------------------------------------------
+    clientScopes:
+    # Keycloak n'envoie PAS les groupes par défaut : il faut un scope dédié avec
+    # un group membership mapper. full.path=false pour ne pas préfixer par "/".
+    - name: groups
+      description: Appartenance aux groupes
+      protocol: openid-connect
+      attributes:
+        include.in.token.scope: "true"
+        display.on.consent.screen: "false"
+      protocolMappers:
+      - name: groups
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        config:
+          claim.name: groups
+          full.path: "false"
+          id.token.claim: "true"
+          access.token.claim: "true"
+          userinfo.token.claim: "true"
+
+    # Audience explicite pour AgentGateway : c'est ce que la passerelle vérifie
+    # dans le claim "aud" (jwtAuthentication.providers[].audiences).
+    - name: agentgateway-audience
+      description: Audience AgentGateway
+      protocol: openid-connect
+      attributes:
+        include.in.token.scope: "true"
+        display.on.consent.screen: "false"
+      protocolMappers:
+      - name: agentgateway-audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        config:
+          included.custom.audience: agentgateway
+          id.token.claim: "false"
+          access.token.claim: "true"
+
+    # --- Clients -------------------------------------------------------------
+    clients:
+    # [index 0] Argo CD — client PUBLIC avec PKCE.
+    # Aucun client secret : rien à provisionner dans argocd-secret, rien à
+    # chiffrer, rien à faire tourner. C'est le mode recommandé pour une UI.
+    - clientId: argocd
+      name: Argo CD
+      enabled: true
+      protocol: openid-connect
+      publicClient: true
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      attributes:
+        pkce.code.challenge.method: S256
+        post.logout.redirect.uris: "+"
+      # PLACEHOLDERS : surchargés par cluster (clusters/<cluster>/keycloak).
+      rootUrl: http://argocd.example.com
+      redirectUris:
+      - http://argocd.example.com/auth/callback
+      - http://argocd.example.com/pkce/verify
+      webOrigins:
+      - http://argocd.example.com
+      defaultClientScopes:
+      - openid
+      - profile
+      - email
+      - roles
+      - groups
+
+    # [index 1] Client de démo pour AgentGateway : direct access grant, ce qui
+    # permet d'obtenir un token en une commande curl pendant la présentation.
+    # A ne JAMAIS activer sur un vrai IdP.
+    - clientId: mcp-client
+      name: MCP demo client
+      enabled: true
+      protocol: openid-connect
+      publicClient: true
+      standardFlowEnabled: false
+      directAccessGrantsEnabled: true
+      defaultClientScopes:
+      - openid
+      - profile
+      - email
+      - roles
+      - groups
+      - agentgateway-audience
+
+    # --- Utilisateurs de démo ------------------------------------------------
+    # LAB UNIQUEMENT. Des mots de passe en clair dans Git sont inacceptables
+    # ailleurs : utiliser spec.placeholders (ESO -> Secret -> import) ou créer
+    # les utilisateurs hors GitOps.
+    users:
+    - username: alice
+      enabled: true
+      email: alice@example.com
+      emailVerified: true
+      firstName: Alice
+      lastName: Admin
+      credentials:
+      - type: password
+        value: alice
+        temporary: false
+      groups:
+      - /platform-admins
+    - username: bob
+      enabled: true
+      email: bob@example.com
+      emailVerified: true
+      firstName: Bob
+      lastName: Viewer
+      credentials:
+      - type: password
+        value: bob
+        temporary: false
+      groups:
+      - /platform-viewers

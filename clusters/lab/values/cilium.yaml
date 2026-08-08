@@ -1,0 +1,17 @@
+# Valeurs Cilium propres au cluster "lab" (kind, mono-nœud).
+#
+# kubeProxyReplacement impose de dire à Cilium comment joindre l'API server
+# sans passer par le Service ClusterIP (que kube-proxy programmait).
+# - kind : le nom du conteneur du control-plane
+# - k3s  : 127.0.0.1 / 6443
+# - kubeadm : l'IP ou le VIP du control-plane
+k8sServiceHost: kind-control-plane
+k8sServicePort: 6443
+
+# Mono-nœud : pas de raison de payer un DaemonSet Envoy dédié ni de la HA.
+hubble:
+  relay:
+    replicas: 1
+
+operator:
+  replicas: 1

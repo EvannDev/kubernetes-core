@@ -1,0 +1,24 @@
+# Gateway IA — classe "agentgateway".
+#
+# C'est LE point de passage obligé : tout appel à un LLM ou à un serveur MCP
+# transite ici. Sans ce goulot, il n'y a pas de gouvernance possible — juste des
+# clés d'API qui circulent dans des variables d'environnement.
+#
+# Le contrôleur provisionne le Deployment + Service du data plane à partir de ce
+# CR. Ces objets ne sont donc PAS dans Git (et ne doivent pas y être) : c'est
+# pourquoi cette Application est séparée de celle qui installe le chart.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        # Les équipes exposent leurs serveurs MCP depuis leur propre namespace.
+        from: All

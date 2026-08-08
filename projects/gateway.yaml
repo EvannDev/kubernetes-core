@@ -1,0 +1,40 @@
+# gateway : AgentGateway — le point de passage obligé du trafic IA (LLM, MCP,
+# A2A) et donc l'endroit où s'applique la gouvernance (JWT, RBAC outil par
+# outil, quotas de tokens, traces).
+#
+# Note : la GatewayClass "agentgateway" n'est PAS dans Git. C'est le contrôleur
+# qui la crée et la possède ; la déclarer ici provoquerait une boucle
+# prune / selfHeal. Elle est seulement whitelistée en lecture.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+spec:
+  description: AgentGateway - gouvernance du trafic IA
+
+  sourceRepos:
+  - https://github.com/EvannDev/kubernetes-core.git
+  - cr.agentgateway.dev/charts
+
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: agentgateway-system
+
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: gateway.networking.k8s.io
+    kind: GatewayClass
+
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-website-fetcher
+  namespace: mcp-demo
+  labels:
+    app: mcp-website-fetcher
+spec:
+  selector:
+    app: mcp-website-fetcher
+  ports:
+  - port: 80
+    targetPort: 8000
+    # Indice de protocole propre à agentgateway : c'est ce qui lui dit de parler
+    # MCP et pas du HTTP quelconque.
+    appProtocol: agentgateway.dev/mcp

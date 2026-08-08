@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Overlay "lab" de Keycloak. La base ne contient aucune URL réelle : tout ce qui
+# est spécifique au cluster est un patch ici. C'est la section 3.1 du ebook
+# (garder la base DRY, stocker les deltas en overlays).
+resources:
+- ../../../base/keycloak
+
+patches:
+# --- URL publique de Keycloak ------------------------------------------------
+# Doit être identique à l'issuer configuré côté Argo CD (values/argocd.yaml)
+# et côté AgentgatewayPolicy (clusters/lab/agentgateway).
+- target:
+    group: k8s.keycloak.org
+    kind: Keycloak
+    name: kc
+  patch: |
+    - op: replace
+      path: /spec/hostname/hostname
+      value: http://keycloak.127.0.0.1.nip.io:8080
+
+# --- Hostname de la HTTPRoute ------------------------------------------------
+# Gateway API compare le Host SANS le port : pas de :8080 ici.
+- target:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: keycloak
+  patch: |
+    - op: replace
+      path: /spec/hostnames/0
+      value: keycloak.127.0.0.1.nip.io
+
+# --- URLs de retour du client Argo CD ----------------------------------------
+# clients/0 = "argocd" dans base/keycloak/realm-platform.yaml.
+- target:
+    group: k8s.keycloak.org
+    kind: KeycloakRealmImport
+    name: platform
+  patch: |
+    - op: replace
+      path: /spec/realm/clients/0/rootUrl
+      value: http://argocd.127.0.0.1.nip.io:8080
+    - op: replace
+      path: /spec/realm/clients/0/redirectUris
+      value:
+      - http://argocd.127.0.0.1.nip.io:8080/auth/callback
+      - http://argocd.127.0.0.1.nip.io:8080/pkce/verify
+    - op: replace
+      path: /spec/realm/clients/0/webOrigins
+      value:
+      - http://argocd.127.0.0.1.nip.io:8080

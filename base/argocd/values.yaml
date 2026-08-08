@@ -1,0 +1,46 @@
+# Valeurs argo-cd COMMUNES.
+# Le domaine, l'URL et l'issuer OIDC sont propres au cluster :
+# clusters/<cluster>/values/argocd.yaml.
+
+# Dex n'est pas utilisé : on branche Argo CD directement sur Keycloak via
+# oidc.config. Un pod de moins et une couche de moins à déboguer.
+dex:
+  enabled: false
+
+configs:
+  cm:
+    # Garder le compte admin local comme issue de secours : une oidc.config
+    # invalide rend sinon l'UI inaccessible.
+    admin.enabled: true
+    exec.enabled: false
+    # Autoriser Kustomize à rendre les charts Helm déclarés via helmCharts:
+    # (non utilisé ici, mais évite une surprise si on en ajoute).
+    kustomize.buildOptions: --enable-helm
+
+  rbac:
+    # Par défaut : lecture seule. L'appartenance à un groupe Keycloak est la
+    # seule façon d'obtenir plus.
+    policy.default: role:readonly
+    # Le nom doit correspondre EXACTEMENT au claim "groups" du token.
+    # Le mapper Keycloak est configuré avec full.path=false, donc pas de "/".
+    policy.csv: |
+      g, platform-admins, role:admin
+      g, platform-viewers, role:readonly
+    scopes: "[groups]"
+
+  params:
+    # TLS terminé par la Gateway : le serveur Argo CD parle en clair derrière.
+    server.insecure: true
+    # Voir ARCHITECTURE.md : les clés de argocd-cmd-params-cm sont consommées
+    # comme arguments du conteneur, donc un changement ici implique un
+    # redémarrage du pod argocd-server (contrairement à argocd-cm).
+
+controller:
+  metrics:
+    enabled: false
+server:
+  metrics:
+    enabled: false
+repoServer:
+  metrics:
+    enabled: false

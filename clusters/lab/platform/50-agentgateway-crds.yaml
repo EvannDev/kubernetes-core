@@ -1,0 +1,42 @@
+# CRD agentgateway : AgentgatewayBackend, AgentgatewayPolicy,
+# AgentgatewayParameters, AgentgatewayModel (groupe agentgateway.dev/v1alpha1).
+#
+# Attention à la lignée : depuis la v1.0 le projet est autonome et n'est plus un
+# sous-ensemble de kgateway. Le groupe d'API est agentgateway.dev (et non
+# gateway.kgateway.dev), la GatewayClass "agentgateway", le controllerName
+# agentgateway.dev/agentgateway. Les manifests kgateway (kind Backend,
+# TrafficPolicy) ne s'appliquent pas ici.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: gateway
+  source:
+    repoURL: cr.agentgateway.dev/charts
+    chart: agentgateway-crds
+    targetRevision: v1.4.1
+    helm:
+      releaseName: agentgateway-crds
+      skipCrds: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agentgateway-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

@@ -1,0 +1,14 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-website-fetcher
+  namespace: mcp-demo
+spec:
+  mcp:
+    targets:
+    - name: website-fetcher
+      static:
+        backendRef:
+          name: mcp-website-fetcher
+        port: 80
+        protocol: SSE
