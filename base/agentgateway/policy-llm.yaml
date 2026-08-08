@@ -35,6 +35,7 @@ spec:
             # La récupération des clés se fait par le Service interne : elle ne
             # dépend donc pas de la Gateway de plateforme ni du DNS externe.
             backendRef:
+              group: ''
               name: kc-service
               kind: Service
               namespace: keycloak

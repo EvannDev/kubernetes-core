@@ -5,7 +5,9 @@ metadata:
   namespace: argocd
 spec:
   parentRefs:
-  - name: platform
+  - group: gateway.networking.k8s.io	
+    kind: Gateway
+    name: platform
     namespace: platform-gateway
     sectionName: http
   # PLACEHOLDER : surchargé par cluster.

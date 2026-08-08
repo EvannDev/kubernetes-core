@@ -20,7 +20,10 @@ spec:
   # Le nom de clé attendu par agentgateway est littéralement "Authorization".
   - secretKey: Authorization
     remoteRef:
+      conversionStrategy: Default	
+      decodingStrategy: None
       key: llm-openai
+      metadataPolicy: None
       property: apiKey
 ---
 apiVersion: agentgateway.dev/v1alpha1
