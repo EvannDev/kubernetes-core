@@ -40,8 +40,29 @@ spec:
       secretRef:
         name: openai-secret
     ai:
+      # ATTENTION : l'exemple de la documentation officielle mappe
+      #   "/v1/models": "Models"
+      # et c'est un piège. Dans agentgateway v1.4.1, RouteType::Models n'est PAS
+      # implémenté — il renvoie inconditionnellement un 501, quel que soit le
+      # fournisseur (proxy/httpproxy.rs) :
+      #
+      #   RouteType::Models => {
+      #       return Ok(::http::Response::builder()
+      #           .status(::http::StatusCode::NOT_IMPLEMENTED)
+      #           .body(... "Route 'Models' not implemented" ...))
+      #   }
+      #
+      # Symptôme : Open WebUI (ou tout client OpenAI-compatible) appelle
+      # /v1/models pour lister les modèles, reçoit 501, et affiche une liste
+      # vide — alors que l'authentification a parfaitement fonctionné.
+      #
+      # Passthrough relaie la requête telle quelle vers le fournisseur. La clé
+      # d'API est bien injectée : apply_late_backend_auth s'exécute après
+      # l'aiguillage par route, y compris pour Passthrough. Ce qu'on perd, c'est
+      # seulement la réécriture LLM et la limitation par tokens — sans objet
+      # pour un simple listage de modèles.
       routes:
         "/v1/responses": "Responses"
         "/v1/chat/completions": "Completions"
-        "/v1/models": "Models"
+        "/v1/models": "Passthrough"
         "*": "Passthrough"
