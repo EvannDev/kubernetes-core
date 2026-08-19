@@ -41,7 +41,7 @@ spec:
     displayName: Platform
     enabled: true
     sslRequired: none          # LAB uniquement : mettre "external" ailleurs.
-    registrationAllowed: false
+    registrationAllowed: true  # LAB uniquement : pour créer des comptes de démo. Sinon false.
 
     # LAB uniquement. Par défaut un access token vit 300 s, ce qui est sain mais
     # pénible quand on colle un token dans une variable d'environnement pour la
