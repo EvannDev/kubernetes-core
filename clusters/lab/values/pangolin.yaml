@@ -1,0 +1,7 @@
+# Delta du cluster "lab" pour le chart newt.
+#
+# Vide à dessein : les identifiants viennent du coffre et la configuration de
+# base convient au lab. Le fichier existe quand même parce que l'Application le
+# déclare en valueFiles — un valueFile manquant fait échouer la synchronisation
+# Argo CD, pas seulement le rendu local.
+{}

@@ -1,0 +1,36 @@
+# ExternalSecret des identifiants du site Newt.
+#
+# Wave 46, donc APRÈS le ClusterSecretStore (25-external-secrets-config, wave 0)
+# et AVANT le chart (78-pangolin, wave 47) : le Secret doit exister quand le pod
+# newt démarre, sinon il boucle en CreateContainerConfigError.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pangolin-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "46"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: network
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/pangolin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pangolin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

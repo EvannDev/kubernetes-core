@@ -19,6 +19,7 @@ spec:
   - https://helm.cilium.io
   # Miroir OCI officiel, autorisé pour un éventuel basculement (airgap).
   - quay.io/cilium/charts
+  - https://charts.fossorial.io
 
   destinations:
   - server: https://kubernetes.default.svc
@@ -33,6 +34,8 @@ spec:
   # Le chart Cilium y dépose les secrets TLS des Gateway.
   - server: https://kubernetes.default.svc
     namespace: cilium-secrets
+  - server: https://kubernetes.default.svc
+    namespace: pangolin
 
   clusterResourceWhitelist:
   - group: ""

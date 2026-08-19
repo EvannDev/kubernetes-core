@@ -1,0 +1,49 @@
+# Newt — client du tunnel sortant vers le control plane Pangolin.
+#
+# Pattern multi-sources : le chart vient d'upstream, les valeurs viennent de CE
+# dépôt. C'est la réponse du ebook à "Keeping it DRY" + "Parameterize" sans
+# dupliquer le chart ni écrire de wrapper Helm.
+# L'ordre des valueFiles compte : base d'abord, cluster ensuite.
+#
+# Wave 47 et non -10 : contrairement à Cilium, newt n'amorce rien. Il consomme
+# un Secret du coffre, donc il ne peut pas précéder External Secrets (wave -5)
+# ni le ClusterSecretStore (wave 0).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pangolin
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "47"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: network
+  sources:
+  - repoURL: https://charts.fossorial.io
+    chart: newt
+    targetRevision: 1.5.0
+    helm:
+      releaseName: newt
+      valueFiles:
+      - $values/base/pangolin/values.yaml
+      - $values/clusters/lab/values/pangolin.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pangolin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

@@ -15,6 +15,13 @@ HUBBLE_HOST    ?= hubble.127.0.0.1.nip.io:8080
 OWUI_HOST      ?= openwebui.127.0.0.1.nip.io:8080
 
 ##@ Général
+# Secrets locaux (jamais commités, cf. .gitignore). `include` n'en fait que des
+# variables Make : il faut les exporter pour que les recettes, qui les lisent en
+# expansion shell ($${VAR}), les voient réellement. La liste est dérivée du
+# fichier, donc une nouvelle clé dans .env est disponible sans toucher ici.
+-include .env
+export $(shell sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/\1/p' .env 2>/dev/null)
+
 
 help: ## Affiche cette aide
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -25,10 +32,11 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	@set -e; \
 	for d in bootstrap projects clusters/$(CLUSTER)/platform \
 	         base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
-	         clusters/$(CLUSTER)/cluster-dns \
+	         base/pangolin clusters/$(CLUSTER)/cluster-dns \
 	         clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
 	         clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
 	         clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
+	         clusters/$(CLUSTER)/pangolin \
 	         apps/mcp-website-fetcher; do \
 	  printf '%-45s' "kustomize build $$d"; \
 	  kustomize build $$d > /dev/null && echo OK; \
@@ -36,10 +44,12 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 
 KUSTOMIZE_DIRS := bootstrap projects \
   base/external-secrets base/keycloak base/platform-gateway base/agentgateway \
+  base/pangolin \
   clusters/$(CLUSTER)/platform clusters/$(CLUSTER)/cluster-dns \
   clusters/$(CLUSTER)/external-secrets clusters/$(CLUSTER)/keycloak \
   clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
   clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
+  clusters/$(CLUSTER)/pangolin \
   apps/mcp-website-fetcher
 
 validate-crs: ## Valide les CR contre les CRD upstream : schéma ET règles CEL
@@ -100,6 +110,11 @@ seed-secrets: ## 4. Sème les secrets sources du "coffre" (hors GitOps, une seul
 	  --dry-run=client -o yaml | kubectl apply -f -
 	kubectl -n platform-secrets create secret generic llm-openai \
 	  --from-literal=apiKey="$${OPENAI_API_KEY:-sk-remplacer}" \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	kubectl -n platform-secrets create secret generic newt-main-tunnel-auth \
+	  --from-literal=PANGOLIN_ENDPOINT="$${PANGOLIN_ENDPOINT}" \
+	  --from-literal=NEWT_ID="$${NEWT_ID}" \
+	  --from-literal=NEWT_SECRET="$${NEWT_SECRET}" \
 	  --dry-run=client -o yaml | kubectl apply -f -
 	@echo ">> Secrets sources en place. ESO les projettera dans keycloak et agentgateway-system."
 

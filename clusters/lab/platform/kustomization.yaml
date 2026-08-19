@@ -30,6 +30,8 @@ resources:
 - 65-open-webui.yaml
 - 70-platform-gateway.yaml
 - 75-argocd-mcp.yaml
+- 76-pangolin-config.yaml
+- 78-pangolin.yaml
 - 90-apps.yaml
 
 labels:

@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aucun delta pour le lab : l'endpoint Pangolin et les identifiants du site
+# viennent du coffre, pas d'un patch. C'est ici qu'on surchargerait
+# l'ExternalSecret si un autre cluster tirait ses identifiants d'un autre store.
+resources:
+- ../../../base/pangolin

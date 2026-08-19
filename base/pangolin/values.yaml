@@ -1,0 +1,12 @@
+# Valeurs de base du chart newt (tunnel sortant vers le control plane Pangolin).
+#
+# Aucun identifiant ici : `auth.existingSecretName` délègue au Secret projeté par
+# l'ExternalSecret voisin. Le chart avertit explicitement contre les
+# identifiants en clair dans les values (ils finissent dans l'historique Helm).
+newtInstances:
+- name: "main-tunnel"
+  enabled: true
+  auth:
+    existingSecretName: "newt-main-tunnel-auth"
+  # Le tunnel accepte les connexions des clients Pangolin (ACCEPT_CLIENTS=true).
+  acceptClients: true
