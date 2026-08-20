@@ -15,4 +15,4 @@ patches:
   patch: |
     - op: replace
       path: /spec/traffic/jwtAuthentication/providers/0/issuer
-      value: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
+      value: https://idp.evann-deb.fr/realms/platform

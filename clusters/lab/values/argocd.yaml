@@ -1,27 +1,26 @@
 # Valeurs argo-cd propres au cluster "lab".
 #
-# Les URLs utilisent nip.io (résolution DNS wildcard vers 127.0.0.1) et le port
-# 8080 parce que le lab expose la Gateway via un simple port-forward :
-#   kubectl -n platform-gateway port-forward svc/cilium-gateway-platform 8080:80
-#
-# Sur un vrai cluster : remplacer par le domaine réel, mettre https, et
-# supprimer le port.
+# Les URLs sont publiques et en https : le TLS est terminé par Pangolin, qui
+# transporte le trafic jusqu'à la Gateway via le tunnel Newt. Argo CD lui-même
+# reste en clair derrière (server.insecure: true dans base/argocd/values.yaml),
+# ce qui est la configuration attendue derrière un reverse proxy terminant TLS.
 global:
-  domain: argocd.127.0.0.1.nip.io
+  domain: argocd.evann-deb.fr
 
 configs:
   cm:
-    # ATTENTION : le chart calcule un preset url = "https://<global.domain>".
-    # Il FAUT l'écraser en http pour le lab, sinon la redirection OIDC casse.
-    # C'est la cause n°1 des "SSO ne s'affiche pas" (FAQ Argo CD).
-    url: http://argocd.127.0.0.1.nip.io:8080
+    # Le chart calcule un preset url = "https://<global.domain>", qui donnerait
+    # déjà la bonne valeur. On la garde explicite : c'est l'URL que Keycloak doit
+    # retrouver à l'identique dans redirectUris, et elle mérite d'être lisible
+    # ici plutôt que déduite.
+    url: https://argocd.evann-deb.fr
 
     # Client PUBLIC + PKCE : aucun client secret à gérer, donc rien à
     # provisionner dans argocd-secret et aucun secret dans Git.
     # Variante client confidentiel + External Secrets : cf. ARCHITECTURE.md.
     oidc.config: |
       name: Keycloak
-      issuer: http://keycloak.127.0.0.1.nip.io:8080/realms/platform
+      issuer: https://idp.evann-deb.fr/realms/platform
       clientID: argocd
       enablePKCEAuthentication: true
       requestedScopes:

@@ -8,7 +8,9 @@
 name: lab
 server: https://kubernetes.default.svc
 distribution: kind
-domain: 127.0.0.1.nip.io
-# Port du port-forward vers la Gateway de plateforme (lab sans LoadBalancer).
-externalPort: 8080
+domain: evann-deb.fr
+# Port du listener de la Gateway de plateforme. Les cibles Newt configurées dans
+# Pangolin visent cilium-gateway-platform.platform-gateway.svc.cluster.local
+# sur ce port.
+externalPort: 80
 description: Cluster de démonstration Lunch and Learn - gouvernance IA

@@ -9,10 +9,12 @@ REPO_URL       ?= https://github.com/EvannDev/kubernetes-core.git
 GATEWAY_API    ?= v1.6.1
 CILIUM_CHART   ?= 1.19.6
 ARGOCD_CHART   ?= 10.3.0
-KC_HOST        ?= keycloak.127.0.0.1.nip.io:8080
-ARGOCD_HOST    ?= argocd.127.0.0.1.nip.io:8080
-HUBBLE_HOST    ?= hubble.127.0.0.1.nip.io:8080
-OWUI_HOST      ?= openwebui.127.0.0.1.nip.io:8080
+# Domaines publics, servis par Pangolin (TLS terminé chez lui, tunnel Newt
+# jusqu'à la Gateway). Plus de port : ce sont des URLs https standard.
+KC_HOST        ?= idp.evann-deb.fr
+ARGOCD_HOST    ?= argocd.evann-deb.fr
+HUBBLE_HOST    ?= hubble.evann-deb.fr
+OWUI_HOST      ?= openwebui.evann-deb.fr
 
 ##@ Général
 # Secrets locaux (jamais commités, cf. .gitignore). `include` n'en fait que des
@@ -162,19 +164,21 @@ status: ## Etat des Applications, dans l'ordre des waves
 	  | (read -r h; echo "$$h"; sort -n)
 
 urls: ## Vérifie la Gateway de plateforme et affiche les URLs
-	@echo ">> Gateway de plateforme (classe cilium, host network + extraPortMappings) :"
+	@echo ">> Gateway de plateforme (classe cilium, jointe par Newt via son ClusterIP) :"
 	@kubectl -n platform-gateway get gateway platform \
 	  -o custom-columns='NAME:.metadata.name,CLASS:.spec.gatewayClassName,PROGRAMMED:.status.conditions[?(@.type=="Programmed")].status' 2>/dev/null || true
 	@echo
-	@echo "   Argo CD  : http://$(ARGOCD_HOST)"
-	@echo "   Keycloak : http://$(KC_HOST)   (alice/alice, bob/bob)"
-	@echo "   Hubble   : http://$(HUBBLE_HOST)"
-	@echo "   Open WebUI : http://$(OWUI_HOST)"
+	@echo "   Argo CD  : https://$(ARGOCD_HOST)"
+	@echo "   Keycloak : https://$(KC_HOST)   (alice/alice, bob/bob)"
+	@echo "   Hubble   : https://$(HUBBLE_HOST)"
+	@echo "   Open WebUI : https://$(OWUI_HOST)"
 	@echo
-	@echo ">> Aucun port-forward n'est nécessaire ni possible ici : en mode host"
-	@echo "   network, Cilium ne crée pas de Service LoadBalancer, et son Service"
-	@echo "   n'a de toute façon aucun pod derrière lui (endpoint sentinelle du"
-	@echo "   datapath BPF). Envoy écoute sur le nœud, kind publie 8080."
+	@echo ">> Ces URLs sont servies par Pangolin : TLS terminé chez lui, trafic"
+	@echo "   acheminé par le tunnel Newt. Les cibles à déclarer côté Pangolin :"
+	@echo "   cilium-gateway-platform.platform-gateway.svc.cluster.local:80"
+	@echo ">> Le port-forward reste impossible sur ce Service : il n'a aucun pod"
+	@echo "   derrière lui, seulement l'endpoint sentinelle du datapath BPF."
+	@echo "   C'est sans conséquence, plus rien n'entre par l'hôte."
 	@echo
 	@echo ">> Gateway IA : make port-forward-ai (celle-là est un Deployment normal)"
 
@@ -185,7 +189,7 @@ admin-password: ## Mot de passe admin local d'Argo CD (issue de secours)
 	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
 
 token: ## Récupère un JWT Keycloak pour alice (USER=bob pour l'autre)
-	@curl -s -X POST "http://$(KC_HOST)/realms/platform/protocol/openid-connect/token" \
+	@curl -s -X POST "https://$(KC_HOST)/realms/platform/protocol/openid-connect/token" \
 	  -d grant_type=password -d client_id=mcp-client \
 	  -d username=$${USER_NAME:-alice} -d password=$${USER_PASS:-alice} \
 	  -d scope="openid groups agentgateway-audience" | jq -r .access_token

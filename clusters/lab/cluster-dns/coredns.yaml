@@ -1,46 +1,46 @@
-# DNS à double horizon (split-horizon) pour l'issuer OIDC.
+# Corefile du cluster.
 #
-# LE PROBLÈME
-# -----------
-# L'issuer OIDC est une chaîne unique, utilisée par DEUX acteurs qui ne sont pas
-# sur le même réseau :
-#   - le NAVIGATEUR, sur le Mac, qui est redirigé vers Keycloak ;
-#   - ARGO CD SERVER, dans un pod, qui appelle le endpoint de découverte
-#     .well-known/openid-configuration en backchannel.
-#
-# Or `keycloak.127.0.0.1.nip.io` résout vers 127.0.0.1. Depuis le Mac c'est le
-# port publié par kind : parfait. Depuis le pod argocd-server, 127.0.0.1 c'est
-# LE POD LUI-MÊME. Argo CD s'interroge donc lui-même, et son serveur web répond
-# un 404 gzippé — d'où l'erreur illisible :
+# HISTORIQUE : POURQUOI CE FICHIER EXISTE
+# ---------------------------------------
+# Tant que la plateforme était exposée en `*.127.0.0.1.nip.io:8080`, l'issuer
+# OIDC était une chaîne unique utilisée par deux acteurs qui ne sont pas sur le
+# même réseau : le NAVIGATEUR sur le Mac, et ARGO CD SERVER dans un pod, qui
+# appelle .well-known/openid-configuration en backchannel. Or nip.io résout vers
+# 127.0.0.1 : depuis le pod, c'était LE POD LUI-MÊME. Argo CD s'interrogeait donc
+# lui-même et son serveur web répondait un 404 gzippé :
 #
 #   failed to query provider "http://keycloak.127.0.0.1.nip.io:8080/realms/platform":
 #   404 Not Found: <octets gzip>
 #
-# Ce n'est ni un problème de realm, ni de client, ni de PKCE.
+# La correction était un DNS à double horizon : une ligne
+# `rewrite name keycloak.127.0.0.1.nip.io kc-service.keycloak.svc.cluster.local`
+# qui donnait au cluster sa propre réponse pour ce nom.
 #
-# LA CORRECTION
-# -------------
-# On donne au cluster sa propre réponse DNS pour ce nom : le Service interne de
-# Keycloak. Le navigateur continue de passer par la Gateway, les pods coupent au
-# plus court. C'est exactement ce que fait un DNS interne en production.
+# POURQUOI LA RÉÉCRITURE A ÉTÉ RETIRÉE
+# ------------------------------------
+# Depuis le passage à `https://idp.evann-deb.fr`, le problème d'origine a
+# disparu : le nom résout vers Pangolin, pas vers 127.0.0.1, donc un pod qui
+# l'appelle atteint bien Keycloak (via le tunnel Newt, en épingle à cheveux).
 #
-# Le port tombe juste : kc-service écoute sur 8080, comme l'URL publique.
-# Et l'en-tête Host reste `keycloak.127.0.0.1.nip.io:8080`, ce qui correspond au
-# spec.hostname du CR Keycloak — le document de découverte annonce donc le bon
-# issuer, et Argo CD valide la correspondance.
+# Et surtout, la réécriture est devenue IMPOSSIBLE à conserver telle quelle :
+# l'issuer est maintenant en https, alors que kc-service écoute en clair sur
+# 8080 (spec.http.httpEnabled dans le CR Keycloak, TLS terminé par Pangolin).
+# Rediriger le nom vers le Service ferait tenter une poignée de main TLS contre
+# un serveur en clair. La rétablir supposerait de servir le certificat de
+# idp.evann-deb.fr à l'intérieur du cluster — hors sujet ici.
 #
-# À NOTER : AgentGateway n'a PAS besoin de cette réécriture. Sa policy récupère
-# les JWKS via un backendRef vers le Service kc-service, sans jamais résoudre le
-# nom public. Il ne compare l'issuer que comme une chaîne de caractères. C'est
-# une bonne illustration de la différence entre « faire confiance à un émetteur »
-# et « aller lui parler ».
+# CONSÉQUENCE ASSUMÉE : le backchannel OIDC d'Argo CD et d'Open WebUI sort sur
+# Internet et revient par le tunnel. Si le tunnel est coupé, le SSO tombe — mais
+# l'interface aussi, puisqu'elle passe par le même chemin. Pas de mode dégradé
+# nouveau.
 #
-# CE FICHIER EST UNE COPIE CONFORME du Corefile généré par kubeadm/kind, avec
-# UNE seule ligne ajoutée (`rewrite`). Le reprendre en entier est le prix à payer
-# pour qu'Argo CD puisse le gérer : Argo remplace, il ne patche pas. Acceptable
-# sur un cluster de lab dont on est propriétaire ; sur un cluster managé, on
-# passerait par le point d'extension du fournisseur (par exemple le ConfigMap
-# coredns-custom sur AKS) plutôt que par le Corefile lui-même.
+# POURQUOI GARDER LE FICHIER
+# --------------------------
+# Il est désormais une COPIE CONFORME du Corefile généré par kubeadm/kind, sans
+# aucun ajout. Le supprimer ne casserait rien tout de suite — l'Application est
+# en `prune: false`, le ConfigMap survivrait — mais il repasserait hors gestion,
+# à dériver en silence. Le garder sous Argo CD conserve un état connu et laisse
+# le point d'extension prêt si un futur cluster redemande un horizon interne.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -54,11 +54,6 @@ data:
            lameduck 5s
         }
         ready
-        # <<< AJOUT : résolution interne de l'issuer OIDC >>>
-        # CoreDNS restaure le nom d'origine dans la réponse, le client n'y voit
-        # que du feu. Le plugin `reload` déjà présent recharge ce fichier tout
-        # seul en une trentaine de secondes.
-        rewrite name keycloak.127.0.0.1.nip.io kc-service.keycloak.svc.cluster.local
         kubernetes cluster.local in-addr.arpa ip6.arpa {
            pods insecure
            fallthrough in-addr.arpa ip6.arpa

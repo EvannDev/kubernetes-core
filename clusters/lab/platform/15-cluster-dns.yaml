@@ -1,7 +1,12 @@
-# Réécriture DNS interne de l'issuer OIDC (voir clusters/lab/cluster-dns/).
+# Corefile du cluster (voir clusters/lab/cluster-dns/).
 #
-# Wave -8 : après Cilium (CoreDNS doit pouvoir démarrer), et bien avant Argo CD
-# (wave 5) qui en a besoin pour interroger Keycloak en backchannel.
+# Cette Application hébergeait la réécriture DNS de l'issuer OIDC, devenue
+# inutile — et impossible — depuis le passage à https://idp.evann-deb.fr : le
+# raisonnement complet est dans le fichier lui-même. Le Corefile est aujourd'hui
+# identique à celui de kubeadm, mais reste sous gestion pour ne pas dériver.
+#
+# Wave -8 : après Cilium (CoreDNS doit pouvoir démarrer), et avant tout ce qui
+# dépend de la résolution de noms.
 #
 # Cette Application prend possession du ConfigMap coredns, créé à l'origine par
 # kubeadm. C'est assumé sur un cluster de lab. prune est à false pour qu'une

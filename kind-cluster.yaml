@@ -1,22 +1,25 @@
 # Cluster kind pour le lab.
 #
-# Trois réglages non négociables :
+# Deux réglages non négociables :
 #  - disableDefaultCNI : sinon kindnet est installé et Cilium ne peut pas
 #    prendre la main proprement ;
-#  - kubeProxyMode: none : on utilise kubeProxyReplacement de Cilium ;
-#  - extraPortMappings 8080 : le seul chemin d'accès depuis macOS.
+#  - kubeProxyMode: none : on utilise kubeProxyReplacement de Cilium.
 #
 # Conséquence du premier point : le cluster reste NotReady jusqu'à ce que Cilium
 # soit déployé. C'est normal.
 #
-# Sur le port 8080 : Cilium expose la Gateway de plateforme en mode host network
-# (cf. clusters/lab/values/cilium.yaml), donc Envoy écoute sur le réseau du
-# nœud — c'est-à-dire dans le conteneur kind. Sans ce mapping, rien n'est
-# joignable depuis macOS : le réseau Docker (172.18.0.0/16) n'est pas routable
-# depuis l'hôte sur Docker Desktop.
+# PLUS D'extraPortMappings, et c'est le cœur du changement d'exposition.
+# Tant que la Gateway était en host network, le port 8080 publié vers macOS
+# était le SEUL chemin d'accès : le réseau Docker (172.18.0.0/16) n'est pas
+# routable depuis l'hôte sur Docker Desktop.
 #
-# extraPortMappings ne peut pas être ajouté après coup : changer ce fichier
-# impose un `make down && make up`.
+# Newt inverse le sens du flux. Le tunnel est sortant : le pod newt joint la
+# Gateway par son ClusterIP depuis l'intérieur du cluster, et c'est Pangolin qui
+# publie vers Internet. Plus rien n'a besoin de traverser la frontière Docker,
+# donc plus rien à mapper.
+#
+# À NOTER : extraPortMappings ne peut être ni ajouté ni retiré à chaud. Revenir
+# sur cette décision impose un `make down && make up`.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: kind
@@ -25,13 +28,3 @@ networking:
   kubeProxyMode: none
 nodes:
 - role: control-plane
-  extraPortMappings:
-  # Gateway de plateforme (classe cilium) : Argo CD et Keycloak.
-  - containerPort: 8080
-    hostPort: 8080
-    protocol: TCP
-  # Réservé si un jour on expose aussi la Gateway IA en host network plutôt que
-  # par port-forward.
-  - containerPort: 8081
-    hostPort: 8081
-    protocol: TCP

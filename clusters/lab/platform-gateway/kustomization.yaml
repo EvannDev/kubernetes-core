@@ -4,6 +4,13 @@ kind: Kustomization
 resources:
 - ../../../base/platform-gateway
 
+# Le listener reste sur le port 80 de la base : plus de patch ici.
+#
+# Il était patché en 8080 tant que Cilium exposait la Gateway en host network —
+# Envoy binde alors le port du listener sur le nœud, et descendre sous 1024
+# aurait exigé envoy.securityContext.capabilities.keepCapNetBindService=true.
+# Depuis que Newt joint la Gateway par son ClusterIP, le port du listener est un
+# port de Service : 80 ne pose aucun problème de capability.
 patches:
 - target:
     group: gateway.networking.k8s.io
@@ -12,7 +19,7 @@ patches:
   patch: |
     - op: replace
       path: /spec/hostnames/0
-      value: argocd.127.0.0.1.nip.io
+      value: argocd.evann-deb.fr
 
 - target:
     group: gateway.networking.k8s.io
@@ -21,22 +28,4 @@ patches:
   patch: |
     - op: replace
       path: /spec/hostnames/0
-      value: hubble.127.0.0.1.nip.io
-
-# Le listener passe de 80 à 8080 pour ce cluster.
-#
-# En mode host network (cf. clusters/lab/values/cilium.yaml), Envoy bind le port
-# du listener sur le réseau du nœud. Sous 1024 il faudrait lui accorder
-# NET_BIND_SERVICE ; 8080 évite cette complication, et c'est le port que kind
-# publie vers localhost (extraPortMappings).
-#
-# Gateway API compare le Host SANS le port : les hostnames des HTTPRoute
-# restent inchangés.
-- target:
-    group: gateway.networking.k8s.io
-    kind: Gateway
-    name: platform
-  patch: |
-    - op: replace
-      path: /spec/listeners/0/port
-      value: 8080
+      value: hubble.evann-deb.fr

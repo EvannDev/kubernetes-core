@@ -36,7 +36,7 @@ ils passent dans les deux cas.
 
 | Port | Quoi | Comment |
 | --- | --- | --- |
-| 8080 | Keycloak (`keycloak.127.0.0.1.nip.io:8080`) | publié par kind, aucun port-forward |
+| — | Keycloak (`https://idp.evann-deb.fr`) | servi par Pangolin, aucun port-forward |
 | 8081 | Gateway IA | `make port-forward-ai` |
 | 15020 | métriques du data plane (dossier *07*) | `kubectl -n agentgateway-system port-forward deploy/ai 15020:15020` |
 

@@ -3,7 +3,7 @@
 sso:
   oidc:
     # Open WebUI attend l'URL du document de découverte, pas l'issuer nu.
-    providerUrl: http://keycloak.127.0.0.1.nip.io:8080/realms/platform/.well-known/openid-configuration
+    providerUrl: https://idp.evann-deb.fr/realms/platform/.well-known/openid-configuration
 
 # Le SEUL fournisseur de modèles : la Gateway IA, par son Service interne.
 # Open WebUI tourne dans le cluster, il n'a donc rien à faire du port-forward.
@@ -101,9 +101,9 @@ extraEnvVars:
   value: "false"
 
 - name: WEBUI_URL
-  value: http://openwebui.127.0.0.1.nip.io:8080
+  value: https://openwebui.evann-deb.fr
 - name: OPENID_REDIRECT_URI
-  value: http://openwebui.127.0.0.1.nip.io:8080/oauth/oidc/callback
+  value: https://openwebui.evann-deb.fr/oauth/oidc/callback
 
 # Pas de compte local : l'authentification passe forcément par Keycloak.
 - name: ENABLE_LOGIN_FORM

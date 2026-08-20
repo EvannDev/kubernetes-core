@@ -18,13 +18,19 @@ make adopt-check   # les composants amorcés sont-ils bien adoptés sans écart 
 make urls          # vérifie la Gateway et affiche les URLs
 ```
 
-- Argo CD : <http://argocd.127.0.0.1.nip.io:8080>
-- Keycloak : <http://keycloak.127.0.0.1.nip.io:8080>
+- Argo CD : <https://argocd.evann-deb.fr>
+- Keycloak : <https://idp.evann-deb.fr>
+- Open WebUI : <https://openwebui.evann-deb.fr>
+- Hubble : <https://hubble.evann-deb.fr>
 - Gateway IA : `make port-forward-ai` → `localhost:8081`
 
-Aucun `port-forward` pour les deux premières : Cilium expose la Gateway de
-plateforme en **mode host network** et kind publie le port 8080 vers localhost.
-Détail et raisons dans [ARCHITECTURE.md](ARCHITECTURE.md) §9.
+Aucun `port-forward` pour les quatre premières : elles sont publiées par
+**Pangolin**, qui termine le TLS et achemine le trafic par le tunnel Newt
+(`clusters/lab/platform/78-pangolin.yaml`). Le tunnel étant **sortant**, le pod
+`newt` joint la Gateway de plateforme par son ClusterIP,
+`cilium-gateway-platform.platform-gateway.svc.cluster.local:80`, comme
+n'importe quel pod du cluster. Rien n'est exposé sur le nœud, rien n'est publié
+vers l'hôte. Détail et raisons dans [ARCHITECTURE.md](ARCHITECTURE.md) §8.1.
 
 ### L'amorçage ne peut pas être du GitOps
 
@@ -70,7 +76,7 @@ USER_NAME=bob USER_PASS=bob make demo-mcp   # autre identité, autres droits
 
 ### Démo : un chat d'entreprise gouverné
 
-<http://openwebui.127.0.0.1.nip.io:8080> — Open WebUI, connecté à Keycloak en
+<https://openwebui.evann-deb.fr> — Open WebUI, connecté à Keycloak en
 SSO, et dont **le seul fournisseur de modèles est la Gateway IA**.
 
 Ce qui rend la démo intéressante tient en un réglage : la connexion est en
@@ -242,9 +248,12 @@ Ils sont documentés en commentaire à l'endroit exact où ils s'appliquent.
   (`served: false`) — le `cilium-operator` plante alors au démarrage sur
   `no matches for kind "TLSRoute" in version "gateway.networking.k8s.io/v1alpha2"`.
 - **L'issuer OIDC doit résoudre depuis le navigateur ET depuis les pods.**
-  `keycloak.127.0.0.1.nip.io` pointe sur `127.0.0.1`, ce qui, dans le pod
-  `argocd-server`, désigne le pod lui-même : Argo CD s'interroge alors lui-même
-  et reçoit son propre 404 gzippé. D'où la réécriture CoreDNS (`cluster-dns`).
+  Avec l'ancien `keycloak.127.0.0.1.nip.io`, le nom pointait sur `127.0.0.1`,
+  ce qui, dans le pod `argocd-server`, désignait le pod lui-même : Argo CD
+  s'interrogeait alors lui-même et recevait son propre 404 gzippé. D'où la
+  réécriture CoreDNS d'alors. Sous `idp.evann-deb.fr`, le nom résout partout
+  pareil et la réécriture a été retirée — au prix d'un backchannel qui sort sur
+  Internet et revient par le tunnel (§6.1).
 
 Le détail des décisions d'architecture, et ce qui a été délibérément écarté, est
 dans [ARCHITECTURE.md](ARCHITECTURE.md).

@@ -192,6 +192,13 @@ plus à `policy.csv`. Le scope est déclaré dans
 
 ### 6.1 L'issuer est une seule chaîne pour deux réseaux
 
+Depuis le passage aux domaines publics servis par Pangolin
+(`https://idp.evann-deb.fr`), le problème décrit ici **ne se pose plus** : le nom
+résout de la même façon depuis le Mac et depuis les pods. La section reste,
+parce que le piège est classique, que le message d'erreur est illisible, et que
+le raisonnement resservira au premier lab exposé en local. Ce qui suit décrit
+donc l'état antérieur, en `*.127.0.0.1.nip.io:8080`.
+
 Celle-là mérite une diapositive, parce que le message d'erreur ne dit
 absolument pas ce qui se passe :
 
@@ -213,18 +220,30 @@ la bouillie d'octets dans le message. Ce n'est ni le realm, ni le client, ni
 PKCE, ni la Gateway.
 
 C'est le problème classique du **DNS à double horizon**. En production il ne se
-pose pas : l'IdP a un nom DNS résolvable partout. En lab, on le reproduit avec
+pose pas : l'IdP a un nom DNS résolvable partout. En lab, on le reproduisait avec
 une réécriture CoreDNS (`clusters/lab/cluster-dns/`) :
 
 ```
 rewrite name keycloak.127.0.0.1.nip.io kc-service.keycloak.svc.cluster.local
 ```
 
-Le navigateur continue de passer par la Gateway, les pods coupent au plus court
-vers le Service. Deux coups de chance qui rendent la manœuvre indolore :
-`kc-service` écoute sur 8080, comme l'URL publique ; et l'en-tête `Host` reste
-`keycloak.127.0.0.1.nip.io:8080`, donc le document de découverte annonce le bon
-`issuer` et Argo CD valide la correspondance.
+Le navigateur continuait de passer par la Gateway, les pods coupaient au plus
+court vers le Service. Deux coups de chance rendaient la manœuvre indolore :
+`kc-service` écoute sur 8080, comme l'URL publique ; et l'en-tête `Host` restait
+`keycloak.127.0.0.1.nip.io:8080`, donc le document de découverte annonçait le bon
+`issuer` et Argo CD validait la correspondance.
+
+**Ce que Pangolin a changé.** L'IdP a maintenant un nom résolvable partout,
+c'est-à-dire exactement la situation de production évoquée plus haut : la
+réécriture a été retirée. Elle serait d'ailleurs devenue nuisible, l'issuer étant
+en `https` alors que `kc-service` écoute en clair — rediriger le nom vers le
+Service ferait tenter une poignée de main TLS contre un serveur en HTTP.
+
+La contrepartie est un **backchannel en épingle à cheveux** : `argocd-server` et
+Open WebUI sortent sur Internet, atteignent Pangolin, et reviennent dans le
+cluster par le tunnel Newt pour lire `.well-known/openid-configuration`. Quelques
+millisecondes de plus, et une dépendance du SSO au tunnel — mais l'interface
+emprunte déjà ce chemin, donc aucun mode de panne nouveau n'apparaît.
 
 **Détail qui vaut le détour : AgentGateway n'est pas concerné.** Sa policy
 récupère les JWKS via un `backendRef` vers le Service `kc-service`, sans jamais
@@ -343,47 +362,45 @@ avec `cloud-provider-kind` une IP est bien attribuée, mais elle appartient au
 réseau Docker (`172.18.0.0/16`) — non routable depuis macOS sur Docker Desktop,
 où le démon tourne dans une VM.
 
-**Solution retenue : le mode host network de Cilium.**
+**Première solution, aujourd'hui abandonnée : le mode host network.** Envoy
+bindait le port du listener sur le réseau du nœud (`gatewayAPI.hostNetwork`
+dans les valeurs Cilium) et kind le publiait vers `localhost`
+(`extraPortMappings`). Deux contreparties : host network et Service
+`LoadBalancer` sont mutuellement exclusifs — Cilium crée un `NodePort` à la
+place — et un listener sous 1024 aurait exigé
+`envoy.securityContext.capabilities.keepCapNetBindService=true`, d'où un
+listener patché en **8080** et ce port dans toutes les URLs du lab.
 
-```yaml
-# clusters/lab/values/cilium.yaml
-gatewayAPI:
-  hostNetwork:
-    enabled: true
-    nodes:
-      matchLabels: {}     # tous les nœuds ; on ciblerait l'infra sur un vrai cluster
+**Solution retenue : le tunnel sortant de Newt.**
+
+Toute la difficulté venait du sens du flux : on cherchait à faire ENTRER du
+trafic depuis macOS vers un cluster enfermé dans Docker. Newt renverse la
+question. Le pod `newt` vit DANS le cluster et ouvre lui-même la connexion vers
+Pangolin ; c'est Pangolin qui expose les domaines publics et fait redescendre
+les requêtes par ce tunnel. Newt joint alors la Gateway comme n'importe quel
+pod :
+
+```
+cilium-gateway-platform.platform-gateway.svc.cluster.local:80
 ```
 
-```yaml
-# kind-cluster.yaml
-extraPortMappings:
-- containerPort: 8080
-  hostPort: 8080
-```
+Ce qui disparaît, en cascade :
 
-Envoy écoute alors sur le réseau du nœud — c'est-à-dire dans le conteneur
-kind — et kind publie ce port vers `localhost`. Aucun binaire supplémentaire,
-comportement identique sur macOS et Linux.
+- le bloc `gatewayAPI.hostNetwork` des valeurs Cilium — le Service
+  `LoadBalancer` réapparaît, son `EXTERNAL-IP` reste `<pending>` sur kind et
+  c'est sans importance : seul le `ClusterIP` est utilisé ;
+- le patch de port du listener — retour au **80** de `base/`, sans question de
+  capability, puisqu'il s'agit désormais d'un port de Service et non d'un bind
+  sur le nœud ;
+- les `extraPortMappings` de `kind-cluster.yaml` — plus rien ne traverse la
+  frontière Docker.
 
-Deux points documentés à connaître :
+Le port-forward, lui, reste impossible sur ce Service pour la raison décrite
+plus haut (aucun pod, endpoint sentinelle). Ce n'est plus un problème : aucun
+accès ne passe par l'hôte.
 
-- **host network et Service LoadBalancer sont mutuellement exclusifs.** Cilium
-  crée un Service `NodePort` à la place. Le Service `LoadBalancer` disparaît, et
-  avec lui la question du port-forward.
-- **Un listener sous le port 1024** exigerait
-  `envoy.securityContext.capabilities.keepCapNetBindService=true` et la
-  capability `NET_BIND_SERVICE`. On écoute donc sur **8080**, ce qui tombe bien :
-  c'est déjà le port présent dans toutes les URLs du lab (`configs.cm.url`,
-  issuer OIDC, `spec.hostname` de Keycloak, redirect URIs du realm).
-
-Le port du listener est un **patch d'overlay**
-(`clusters/lab/platform-gateway/`), pas une valeur de `base/` : sur un cluster
-avec un vrai LoadBalancer, on supprime le bloc `hostNetwork` et le listener
-reste sur 80/443. Rien d'autre ne bouge — Gateway API compare le `Host` sans le
-port, donc les `hostnames` des HTTPRoute sont inchangés.
-
-`extraPortMappings` ne pouvant pas être ajouté à un cluster kind existant,
-changer ce port impose un `make down && make up`.
+`extraPortMappings` ne pouvant être ni ajouté ni retiré à chaud, revenir sur ce
+choix impose un `make down && make up`.
 
 La `GatewayClass` elle-même n'est pas dans Git : le contrôleur AgentGateway la
 crée à partir des valeurs Helm `gatewayClassName` / `controllerName`. La

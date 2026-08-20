@@ -12,4 +12,4 @@ patches:
   patch: |
     - op: replace
       path: /spec/hostnames/0
-      value: openwebui.127.0.0.1.nip.io
+      value: openwebui.evann-deb.fr

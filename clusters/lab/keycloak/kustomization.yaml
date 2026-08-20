@@ -11,6 +11,12 @@ patches:
 # --- URL publique de Keycloak ------------------------------------------------
 # Doit être identique à l'issuer configuré côté Argo CD (values/argocd.yaml)
 # et côté AgentgatewayPolicy (clusters/lab/agentgateway).
+#
+# https bien que Keycloak écoute en clair : le TLS est terminé par Pangolin, et
+# spec.proxy.headers: xforwarded (dans la base) fait confiance au
+# X-Forwarded-Proto qui en découle. Sans ce couple hostname-https / xforwarded,
+# Keycloak annoncerait des URLs en http dans son document de découverte et les
+# navigateurs refuseraient la redirection.
 - target:
     group: k8s.keycloak.org
     kind: Keycloak
@@ -18,10 +24,10 @@ patches:
   patch: |
     - op: replace
       path: /spec/hostname/hostname
-      value: http://keycloak.127.0.0.1.nip.io:8080
+      value: https://idp.evann-deb.fr
 
 # --- Hostname de la HTTPRoute ------------------------------------------------
-# Gateway API compare le Host SANS le port : pas de :8080 ici.
+# Gateway API compare le Host sans le schéma : pas de https:// ici.
 - target:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
@@ -29,7 +35,7 @@ patches:
   patch: |
     - op: replace
       path: /spec/hostnames/0
-      value: keycloak.127.0.0.1.nip.io
+      value: idp.evann-deb.fr
 
 # --- URLs de retour du client Argo CD ----------------------------------------
 # clients/0 = "argocd" dans base/keycloak/realm-platform.yaml.
@@ -40,16 +46,16 @@ patches:
   patch: |
     - op: replace
       path: /spec/realm/clients/0/rootUrl
-      value: http://argocd.127.0.0.1.nip.io:8080
+      value: https://argocd.evann-deb.fr
     - op: replace
       path: /spec/realm/clients/0/redirectUris
       value:
-      - http://argocd.127.0.0.1.nip.io:8080/auth/callback
-      - http://argocd.127.0.0.1.nip.io:8080/pkce/verify
+      - https://argocd.evann-deb.fr/auth/callback
+      - https://argocd.evann-deb.fr/pkce/verify
     - op: replace
       path: /spec/realm/clients/0/webOrigins
       value:
-      - http://argocd.127.0.0.1.nip.io:8080
+      - https://argocd.evann-deb.fr
 
 # --- URLs de retour du client Open WebUI -------------------------------------
 # clients/1 = "open-webui" dans base/keycloak/realm-platform.yaml.
@@ -60,12 +66,12 @@ patches:
   patch: |
     - op: replace
       path: /spec/realm/clients/1/rootUrl
-      value: http://openwebui.127.0.0.1.nip.io:8080
+      value: https://openwebui.evann-deb.fr
     - op: replace
       path: /spec/realm/clients/1/redirectUris
       value:
-      - http://openwebui.127.0.0.1.nip.io:8080/oauth/oidc/callback
+      - https://openwebui.evann-deb.fr/oauth/oidc/callback
     - op: replace
       path: /spec/realm/clients/1/webOrigins
       value:
-      - http://openwebui.127.0.0.1.nip.io:8080
+      - https://openwebui.evann-deb.fr
