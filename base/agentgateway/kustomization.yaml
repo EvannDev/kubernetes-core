@@ -10,4 +10,5 @@ resources:
 - models.yaml
 - models-ollama.yaml
 - policy-llm.yaml
+- policy-assistant.yaml
 - policy-observability.yaml

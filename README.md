@@ -128,6 +128,24 @@ Trois pièges désamorcés dans la configuration, tous invisibles sinon :
   d'environnement qu'au premier démarrage puis les recopie en base : Git et le
   cluster divergeraient en silence.
 
+### Démo : un prompt système que personne ne peut retirer
+
+`base/agentgateway/policy-assistant.yaml` pose un copilote technique DevOps
+Gologic sur le listener de la Gateway. Tout appel LLM en hérite, y compris un
+`curl` brut qui n'envoie aucun message système :
+
+```bash
+make port-forward-ai
+TOKEN=$(USER_NAME=bob USER_PASS=bob make -s token)
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3:8b","messages":[{"role":"user","content":"Qui es-tu ?"}]}' \
+  http://localhost:8081/v1/chat/completions | jq -r '.choices[0].message.content'
+```
+
+Le prompt n'est ni dans Open WebUI, ni dans `opencode.jsonc` : il est dans Git,
+revu en pull request, et la passerelle l'ajoute avant le message du client.
+Détails et limites mesurées dans `ARCHITECTURE.md` §9.2.
+
 ### Démo : un agent de code réellement gouverné
 
 `opencode.jsonc` à la racine configure [opencode](https://opencode.ai) pour que
