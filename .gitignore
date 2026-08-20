@@ -6,3 +6,4 @@ secrets.local.*
 .DS_Store
 _to_delete/
 hack/.crd-cache/
+.serena

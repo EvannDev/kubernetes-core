@@ -206,6 +206,48 @@ demo-mcp-anonymous: ## Le même appel sans token : doit être refusé
 	     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
 	     http://localhost:8081/mcp | head -20
 
+##@ Modèles locaux (Ollama, sur le Mac)
+
+# Ollama reste HORS du cluster : Docker Desktop ne passe pas le GPU, un pod dans
+# kind tournerait en CPU seul. Le flux va donc du cluster vers l'hôte, par
+# host.docker.internal — rien à publier, aucun extraPortMappings à remettre.
+# Le catalogue correspondant est dans base/agentgateway/models-ollama.yaml.
+
+OLLAMA_MODELS ?= llama3.2:3b qwen2.5-coder:32b
+
+ollama-models: ## Tire les modèles locaux servis par la Gateway IA
+	@for m in $(OLLAMA_MODELS); do echo ">> ollama pull $$m"; ollama pull "$$m"; done
+	@ollama list
+
+ollama-serve: ## Lance Ollama en écoute sur toutes les interfaces (bloquant)
+	# Par défaut Ollama n'écoute que sur 127.0.0.1 : inatteignable depuis un
+	# conteneur. OLLAMA_HOST=0.0.0.0 est LA condition pour que la passerelle
+	# puisse le joindre. Si le service brew tourne déjà, il tient le port :
+	# `brew services stop ollama` d'abord.
+	OLLAMA_HOST=0.0.0.0:11434 ollama serve
+
+ollama-check: ## Vérifie qu'Ollama est joignable DEPUIS le cluster (le seul test qui compte)
+	@kubectl run ollama-check --rm -i --restart=Never --quiet \
+	  --image=curlimages/curl:8.11.1 -- \
+	  curl -sS -m 5 http://host.docker.internal:11434/api/tags \
+	  | jq -r '.models[].name' \
+	  || echo ">> Echec. Vérifier que 'make ollama-serve' tourne et écoute sur 0.0.0.0"
+
+demo-llm-local: ## Chat avec un modèle local, en tant que bob (non admin)
+	# Montre que la règle se pose par modèle : bob n'a pas accès à gpt-4o mais
+	# discute avec un modèle local, avec le MÊME token sur la MÊME passerelle.
+	@TOKEN=$$(USER_NAME=$${USER_NAME:-bob} USER_PASS=$${USER_PASS:-bob} $(MAKE) -s token); \
+	curl -s -H "Authorization: Bearer $$TOKEN" \
+	     -H 'Content-Type: application/json' \
+	     -d '{"model":"$(firstword $(OLLAMA_MODELS))","messages":[{"role":"user","content":"Réponds en une phrase : à quoi sert une passerelle IA ?"}]}' \
+	     http://localhost:8081/v1/chat/completions | jq .
+
+models-catalog: ## Catalogue vu par un appelant donné (USER_NAME=alice pour comparer)
+	# Le même appel, deux réponses : model_list_response() filtre /v1/models sur
+	# visibility ET sur les règles d'autorisation de chaque AgentgatewayModel.
+	@TOKEN=$$($(MAKE) -s token); \
+	curl -s -H "Authorization: Bearer $$TOKEN" http://localhost:8081/v1/models | jq -r '.data[].id'
+
 ##@ Nettoyage
 
 down: ## Supprime le cluster kind
@@ -214,4 +256,5 @@ down: ## Supprime le cluster kind
 .PHONY: help validate validate-crs waves kind-up install-gateway-api install-cilium \
         install-argocd seed-secrets bootstrap up adopt-check \
         status urls port-forward-ai admin-password token demo-mcp \
-        demo-mcp-anonymous down
+        demo-mcp-anonymous ollama-models ollama-serve ollama-check \
+        demo-llm-local models-catalog down

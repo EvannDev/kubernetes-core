@@ -1,0 +1,66 @@
+# LES MODÈLES LOCAUX — même catalogue, même passerelle, aucune clé d'API.
+#
+# Ollama tourne sur le Mac, PAS dans le cluster : Docker Desktop ne passe pas le
+# GPU, l'accélération Metal n'existe que côté hôte. Un Deployment dans kind
+# tournerait en CPU seul, à une vitesse inutilisable pour une démo.
+#
+# COMMENT LA PASSERELLE L'ATTEINT. Le flux va du cluster VERS l'hôte, jamais
+# l'inverse : rien à publier, donc aucun extraPortMappings à remettre dans
+# kind-cluster.yaml. Le nom `host.docker.internal` est résolu de bout en bout —
+# CoreDNS fait `forward . /etc/resolv.conf`, et le resolv.conf du nœud kind
+# pointe sur 192.168.65.254, le résolveur interne de Docker Desktop, qui est
+# précisément celui qui répond pour ce nom.
+# Prérequis côté hôte : Ollama doit écouter hors loopback (OLLAMA_HOST=0.0.0.0),
+# sinon aucun conteneur ne peut le joindre. Voir `make ollama-serve`.
+#
+# CE QUE ÇA AJOUTE À LA DÉMONSTRATION. Le contraste devient explicite dans le
+# menu déroulant d'Open WebUI : les modèles OpenAI sont facturés et réservés à
+# `platform-admins`, les modèles locaux ne coûtent rien et sont ouverts à tout
+# porteur d'un JWT valide. La règle se pose PAR MODÈLE, indépendamment du
+# fournisseur — c'est tout l'intérêt d'avoir un modèle = une ressource.
+#
+# LIMITE ASSUMÉE : c'est le seul composant du lab hors GitOps. Argo CD ne peut
+# ni l'installer ni le réconcilier. Si `ollama serve` n'est pas lancé, les
+# modèles restent listés dans /v1/models mais toute inférence échoue.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: qwen2-5-coder-32b
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  # Un tag Ollama contient un ':', interdit dans un metadata.name Kubernetes. On
+  # dissocie donc les deux : le nom de ressource reste DNS-safe, et match.model
+  # porte le tag exact — c'est cette chaîne que la passerelle présente en amont.
+  match:
+    model: "qwen2.5-coder:32b"
+  provider: Ollama
+  # Obligatoire : le CRD porte la règle CEL « ollama requires baseURL ». Il
+  # refuserait aussi localhost, 127.0.0.0/8, 169.254.0.0/16 et ::1 — un nom
+  # d'hôte est de toute façon le seul choix qui ait un sens depuis un pod.
+  baseURL: http://host.docker.internal:11434
+  # Pas de policies.auth : Ollama n'attend aucune clé, et c'est bien l'argument.
+  # Pas de policies.authorization non plus : model_authorized() renvoie true
+  # quand aucune règle n'est déclarée. L'authentification, elle, reste exigée
+  # par la policy `ai-authn` posée sur la Gateway.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: llama3-2-3b
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai
+    sectionName: http
+  match:
+    model: "llama3.2:3b"
+  provider: Ollama
+  baseURL: http://host.docker.internal:11434

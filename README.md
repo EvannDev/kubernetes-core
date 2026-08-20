@@ -72,7 +72,38 @@ make port-forward-ai        # dans un autre terminal
 make demo-mcp               # avec un JWT alice  -> la liste des outils
 make demo-mcp-anonymous     # sans token         -> refusé
 USER_NAME=bob USER_PASS=bob make demo-mcp   # autre identité, autres droits
+make models-catalog         # le catalogue de modèles, filtré par l'appelant
 ```
+
+### Démo : des modèles locaux dans le même catalogue
+
+Ollama tourne **sur le Mac**, pas dans kind : Docker Desktop ne passe pas le GPU,
+et l'accélération Metal n'existe que côté hôte. La passerelle le joint par
+`host.docker.internal` — le flux part du cluster vers l'hôte, donc rien à
+publier et aucun `extraPortMappings` à remettre dans `kind-cluster.yaml`.
+
+```bash
+make ollama-models          # tire llama3.2:3b et qwen2.5-coder:32b
+make ollama-serve           # OLLAMA_HOST=0.0.0.0, bloquant, dans un terminal à part
+make ollama-check           # joignabilité DEPUIS le cluster : le seul test qui compte
+```
+
+Puis, `make port-forward-ai` étant lancé :
+
+```bash
+make models-catalog                          # le catalogue vu par alice : 6 modèles
+USER_NAME=bob USER_PASS=bob make models-catalog   # bob : pas de gpt-4o, mais les locaux
+make demo-llm-local                          # bob discute avec un modèle local
+```
+
+Le contraste est tout l'intérêt : les modèles OpenAI sont facturés et réservés à
+`platform-admins`, les modèles locaux ne coûtent rien et sont ouverts à tout
+porteur d'un JWT valide. La règle se pose **par modèle**
+(`base/agentgateway/models-ollama.yaml`), pas par fournisseur.
+
+À savoir : Ollama est le seul composant hors GitOps du lab. Si `ollama serve`
+n'est pas lancé, les modèles restent listés dans `/v1/models` mais l'inférence
+échoue.
 
 ### Démo : un chat d'entreprise gouverné
 

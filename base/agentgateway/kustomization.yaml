@@ -8,5 +8,6 @@ resources:
 - gateway.yaml
 - externalsecret-llm.yaml
 - models.yaml
+- models-ollama.yaml
 - policy-llm.yaml
 - policy-observability.yaml

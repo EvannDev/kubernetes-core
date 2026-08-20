@@ -437,6 +437,51 @@ chaque application porte sa propre clé.
 Piège de la 1.4 à connaître avant de monter sur scène : un refus en phase requête
 renvoie **HTTP 200** avec un corps JSON-RPC d'erreur, pas un code non-2xx.
 
+### 9.1 Les modèles locaux, et pourquoi Ollama reste sur le Mac
+
+Le catalogue mélange volontairement deux natures de fournisseurs. `provider:
+OpenAI` sort du cluster vers un service facturé, avec une clé projetée par ESO.
+`provider: Ollama` — un enum natif du CRD, pas un `Custom` bricolé — vise un
+serveur qui tourne sur la machine de développement, sans clé du tout.
+
+**Pourquoi pas un Deployment Ollama dans kind.** Docker Desktop ne passe pas le
+GPU au conteneur du nœud. Un pod Ollama tournerait en CPU seul, à une vitesse qui
+rend la démonstration pénible, et les poids occuperaient le disque du nœud kind à
+chaque `make down && make up`. L'accélération Metal n'existe que côté hôte : le
+modèle reste donc là où il est rapide.
+
+**Pourquoi ça ne coûte aucune plomberie réseau.** C'est la même bascule que celle
+de Newt (§8.1) : le flux part du cluster VERS l'hôte, jamais l'inverse. Il n'y a
+donc rien à publier, et surtout **aucun `extraPortMappings` à remettre dans
+`kind-cluster.yaml`** — ce qui aurait imposé de détruire et recréer le cluster.
+Le nom `host.docker.internal` se résout de bout en bout sans qu'on ajoute une
+seule ressource : CoreDNS fait `forward . /etc/resolv.conf`, le `resolv.conf` du
+nœud kind pointe sur `192.168.65.254`, et c'est exactement le résolveur interne
+de Docker Desktop qui fait autorité sur ce nom.
+
+Le CRD impose `baseURL` dès que `provider: Ollama` (règle CEL « ollama requires
+baseURL »), et refuse par ailleurs `localhost`, `127.0.0.0/8`, `169.254.0.0/16`
+et `::1` — un nom d'hôte est de toute façon le seul choix qui ait un sens depuis
+un pod. Le seul prérequis est côté Mac : Ollama n'écoute que sur `127.0.0.1` par
+défaut, il faut `OLLAMA_HOST=0.0.0.0` (cible `make ollama-serve`).
+
+**Ce que ça ajoute à la démonstration.** Le contraste devient lisible dans le menu
+déroulant d'Open WebUI : les modèles OpenAI sont facturés et réservés à
+`platform-admins`, les modèles locaux ne coûtent rien et sont ouverts à tout
+porteur d'un JWT valide. La règle se pose **par modèle**, indépendamment du
+fournisseur — c'est précisément ce que permet « un modèle = une ressource
+Kubernetes », et c'est infaisable avec un backend unique par provider.
+
+Détail d'écriture : un tag Ollama contient un `:`, interdit dans un
+`metadata.name`. On dissocie donc le nom de ressource (DNS-safe, `qwen3-8b`) du
+nom de modèle (`spec.match.model: "qwen3:8b"`), qui est la chaîne réellement
+présentée en amont.
+
+**Limite assumée.** C'est le seul composant du lab hors GitOps : Argo CD ne peut
+ni l'installer, ni le surveiller, ni le réconcilier. Si `ollama serve` n'est pas
+lancé, les modèles restent listés dans `/v1/models` mais toute inférence échoue.
+C'est le prix de l'accélération Metal, et il vaut mieux l'écrire que le masquer.
+
 ## 10. Ce qui a été délibérément écarté
 
 ### Rendered Manifests (§6)
