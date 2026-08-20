@@ -1,0 +1,43 @@
+# Grafana — exposée via la Gateway de plateforme, comme Argo CD et Hubble UI.
+#
+# La route vit dans le namespace `monitoring` parce que c'est LE SERVICE qui
+# l'impose : en Gateway API un backendRef est local au namespace de la route. Le
+# parentRef, lui, traverse les namespaces (la Gateway `platform` autorise via
+# allowedRoutes.namespaces.from: All).
+#
+# Conséquence côté GitOps : cette route est déployée par l'app `platform-gateway`
+# qui vit dans le projet `network` — il a donc fallu ajouter le namespace
+# `monitoring` à ses destinations.
+#
+# Contrairement à Hubble UI, Grafana a une vraie authentification : SSO Keycloak
+# avec mapping des groupes (platform-admins -> Admin, le reste -> Viewer).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: platform
+    namespace: platform-gateway
+    sectionName: http
+  # PLACEHOLDER : surchargé par cluster.
+  hostnames:
+  - grafana.example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    # `kps-grafana` : le nom vient de la releaseName `kps` de l'Application.
+    # Renommer la release casse cette route en silence — Cilium répond
+    # ResolvedRefs=True même vers un Service inexistant, l'erreur ne sort qu'en
+    # 503 à l'exécution.
+    - group: ""
+      kind: Service
+      name: kps-grafana
+      port: 80
+      weight: 1

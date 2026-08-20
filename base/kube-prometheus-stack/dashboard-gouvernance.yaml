@@ -1,0 +1,654 @@
+# LE DASHBOARD QUE LE CHART NE PEUT PAS FOURNIR.
+#
+# Le chart agentgateway livre déjà son propre dashboard (38 ko, activé par
+# monitoring.grafanaDashboard) : consommation de tokens, coût en USD, time to
+# first token, appels d'outils MCP, latence par route. Il est très bien, et il
+# est repris tel quel — inutile de le réécrire.
+#
+# Ce qu'il ne PEUT pas montrer, c'est QUI. Les métriques natives d'agentgateway
+# ne portent aucun label d'identité : on découpe par modèle, par fournisseur et
+# par statut, jamais par personne. Les labels `user` et `team` sont ajoutés par
+# la policy ai-observability (base/agentgateway/policy-observability.yaml,
+# bloc frontend.metrics) — sans elle, la moitié de ces panneaux reste vide.
+#
+# C'est le dashboard du Lunch & Learn : « qui a brûlé le budget », « combien
+# tourne en local plutôt qu'en facturé », et « qu'est-ce que la passerelle a
+# refusé ». Trois questions qu'aucune application ne sait documenter seule.
+#
+# Le sidecar de Grafana ramasse ce ConfigMap par son label grafana_dashboard,
+# dans n'importe quel namespace (searchNamespace: ALL).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-gouvernance-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  agentgateway-gouvernance.json: |
+    {
+      "uid": "agentgateway-gouvernance",
+      "title": "AgentGateway — Gouvernance IA",
+      "tags": [
+        "agentgateway",
+        "gouvernance",
+        "llm"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {
+        "from": "now-3h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Source"
+          },
+          {
+            "name": "user",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "query": "label_values(agentgateway_gen_ai_client_token_usage_sum, user)",
+            "multi": true,
+            "includeAll": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "refresh": 2,
+            "label": "Utilisateur"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "Qui consomme",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 1
+          },
+          "id": 1,
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "title": "Tokens par utilisateur (1 h)",
+          "description": "La question que personne ne sait repondre sans passerelle : qui a consomme quoi. Le label `user` vient de jwt.preferred_username, ajoute par la policy ai-observability.",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 8,
+            "h": 6
+          },
+          "id": 2,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value_and_name",
+            "colorMode": "value"
+          },
+          "targets": [
+            {
+              "expr": "sum by (user) (increase(agentgateway_gen_ai_client_token_usage_sum[1h]))",
+              "legendFormat": "{{user}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Debit de tokens par utilisateur",
+          "description": "",
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 8,
+            "h": 6
+          },
+          "id": 3,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 40,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (user) (rate(agentgateway_gen_ai_client_token_usage_sum[5m]))",
+              "legendFormat": "{{user}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Par equipe",
+          "description": "team est derive des groupes Keycloak. En production on ne garderait que ce label : `user` explose la cardinalite.",
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 8,
+            "h": 6
+          },
+          "id": 4,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 40,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (team) (rate(agentgateway_gen_ai_client_token_usage_sum[5m]))",
+              "legendFormat": "{{team}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Souverainete : local contre facture",
+          "gridPos": {
+            "x": 0,
+            "y": 6,
+            "w": 24,
+            "h": 1
+          },
+          "id": 10,
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "title": "Tokens locaux vs factures (1 h)",
+          "description": "ollama = tourne sur la machine, cout zero. openai = facture au token. Le meme catalogue, la meme passerelle, deux economies.",
+          "gridPos": {
+            "x": 0,
+            "y": 7,
+            "w": 6,
+            "h": 6
+          },
+          "id": 11,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value_and_name",
+            "colorMode": "value"
+          },
+          "targets": [
+            {
+              "expr": "sum by (gen_ai_system) (increase(agentgateway_gen_ai_client_token_usage_sum[1h]))",
+              "legendFormat": "{{gen_ai_system}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Debit par fournisseur",
+          "description": "",
+          "gridPos": {
+            "x": 7,
+            "y": 6,
+            "w": 9,
+            "h": 6
+          },
+          "id": 12,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 40,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (gen_ai_system) (rate(agentgateway_gen_ai_client_token_usage_sum[5m]))",
+              "legendFormat": "{{gen_ai_system}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Tokens par modele et par type",
+          "description": "",
+          "gridPos": {
+            "x": 16,
+            "y": 6,
+            "w": 8,
+            "h": 6
+          },
+          "id": 13,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (gen_ai_request_model, gen_ai_token_type) (rate(agentgateway_gen_ai_client_token_usage_sum[5m]))",
+              "legendFormat": "{{gen_ai_request_model}} / {{gen_ai_token_type}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Gouvernance : ce qui est refuse",
+          "gridPos": {
+            "x": 0,
+            "y": 12,
+            "w": 24,
+            "h": 1
+          },
+          "id": 20,
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "timeseries",
+          "title": "Requetes refusees par la passerelle",
+          "description": "401 = pas de JWT valide (policy ai-authn). 403 = Model authorization denied, la regle portee par l AgentgatewayModel. LIMITE VERIFIEE SUR LE CLUSTER : sur un refus, les labels `user` et `team` valent `unknown` — la requete est rejetee avant que le contexte JWT ne soit disponible pour les labels de metriques. On sait donc COMBIEN de refus et de quel type, pas QUI. Pour attribuer un refus a une personne, ce sont les access logs qu il faut lire : la policy ai-observability y ajoute jwt.subject et jwt.groups.",
+          "gridPos": {
+            "x": 0,
+            "y": 12,
+            "w": 12,
+            "h": 6
+          },
+          "id": 21,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (status, reason) (increase(agentgateway_requests_total{status=~\"401|403\"}[$__rate_interval]))",
+              "legendFormat": "{{status}} — {{reason}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Requetes par statut",
+          "description": "",
+          "gridPos": {
+            "x": 12,
+            "y": 12,
+            "w": 12,
+            "h": 6
+          },
+          "id": 22,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 40,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(agentgateway_requests_total[5m]))",
+              "legendFormat": "{{status}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Experience : ce que l utilisateur ressent",
+          "gridPos": {
+            "x": 0,
+            "y": 18,
+            "w": 24,
+            "h": 1
+          },
+          "id": 30,
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "timeseries",
+          "title": "Time to first token (p95)",
+          "description": "L ecart entre un 8B local et un modele distant se voit ici. ATTENTION : cette metrique n est alimentee QUE par les requetes en streaming (verifie sur le cluster) — un appel non-streaming laisse le panneau vide. Open WebUI streame par defaut, donc l usage reel la remplit.",
+          "gridPos": {
+            "x": 0,
+            "y": 24,
+            "w": 12,
+            "h": 7
+          },
+          "id": 31,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(agentgateway_gen_ai_server_time_to_first_token_bucket[5m])))",
+              "legendFormat": "{{gen_ai_request_model}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Duree de requete (p95)",
+          "description": "",
+          "gridPos": {
+            "x": 12,
+            "y": 24,
+            "w": 12,
+            "h": 7
+          },
+          "id": 32,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "sum",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, gen_ai_request_model) (rate(agentgateway_gen_ai_server_request_duration_bucket[5m])))",
+              "legendFormat": "{{gen_ai_request_model}}",
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              }
+            }
+          ]
+        }
+      ]
+    }

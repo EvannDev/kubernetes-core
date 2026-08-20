@@ -27,6 +27,7 @@ jobs:
                  clusters/*/platform clusters/*/cluster-dns \
                  clusters/*/external-secrets clusters/*/keycloak \
                  clusters/*/platform-gateway clusters/*/agentgateway \
+                 base/kube-prometheus-stack clusters/*/kube-prometheus-stack \
                  apps/*; do
           [ -f "$d/kustomization.yaml" ] || continue
           echo "::group::$d"
@@ -48,6 +49,7 @@ jobs:
           clusters/*/platform clusters/*/cluster-dns \
           clusters/*/external-secrets clusters/*/keycloak \
           clusters/*/platform-gateway clusters/*/agentgateway \
+          base/kube-prometheus-stack clusters/*/kube-prometheus-stack \
           apps/*
 
     - name: Aucun Secret en clair dans Git

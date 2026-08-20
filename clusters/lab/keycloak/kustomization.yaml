@@ -75,3 +75,22 @@ patches:
       path: /spec/realm/clients/1/webOrigins
       value:
       - https://openwebui.evann-deb.fr
+
+# --- URLs de retour du client Grafana ----------------------------------------
+# clients/4 = "grafana" dans base/keycloak/realm-platform.yaml.
+- target:
+    group: k8s.keycloak.org
+    kind: KeycloakRealmImport
+    name: platform
+  patch: |
+    - op: replace
+      path: /spec/realm/clients/4/rootUrl
+      value: https://grafana.evann-deb.fr
+    - op: replace
+      path: /spec/realm/clients/4/redirectUris
+      value:
+      - https://grafana.evann-deb.fr/login/generic_oauth
+    - op: replace
+      path: /spec/realm/clients/4/webOrigins
+      value:
+      - https://grafana.evann-deb.fr

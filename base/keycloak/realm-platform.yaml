@@ -35,6 +35,10 @@ spec:
       secret:
         name: open-webui-oidc
         key: clientSecret
+    GRAFANA_CLIENT_SECRET:
+      secret:
+        name: grafana-oidc
+        key: clientSecret
 
   realm:
     realm: platform
@@ -257,6 +261,35 @@ spec:
       - web-origins
       - groups
       - agentgateway-audience
+
+    # Grafana — client confidentiel, comme Open WebUI. Le mapping des rôles se
+    # fait côté Grafana à partir du claim `groups` (role_attribute_path dans
+    # clusters/lab/values/kube-prometheus-stack.yaml) : platform-admins -> Admin,
+    # tout le reste -> Viewer. Rien à déclarer ici pour ça, le client scope
+    # `groups` suffit.
+    - clientId: grafana
+      name: Grafana
+      enabled: true
+      protocol: openid-connect
+      publicClient: false
+      clientAuthenticatorType: client-secret
+      secret: ${GRAFANA_CLIENT_SECRET}
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      # PLACEHOLDERS : surchargés par cluster.
+      rootUrl: http://grafana.example.com
+      redirectUris:
+      - http://grafana.example.com/login/generic_oauth
+      webOrigins:
+      - http://grafana.example.com
+      defaultClientScopes:
+      - basic
+      - acr
+      - profile
+      - email
+      - roles
+      - web-origins
+      - groups
 
     # --- Utilisateurs de démo ------------------------------------------------
     # LAB UNIQUEMENT. Des mots de passe en clair dans Git sont inacceptables

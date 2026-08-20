@@ -1,0 +1,38 @@
+# Namespace, ExternalSecret du client OIDC Grafana, et dashboard de gouvernance.
+#
+# Wave 48, donc AVANT le chart (49) : même logique que le doublet
+# open-webui-config / open-webui. Le Secret grafana-oidc doit exister quand le
+# pod Grafana démarre, sinon il boucle en CreateContainerConfigError — et le
+# ConfigMap du dashboard doit être là avant que le sidecar ne fasse son premier
+# inventaire.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "48"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: observability
+  source:
+    repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    path: clusters/lab/kube-prometheus-stack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

@@ -521,6 +521,68 @@ Le prompt part à chaque requête et se paie en tokens à chaque requête : il e
 écrit dense pour cette raison, et `backend.ai.promptCaching` existe dans le même
 bloc de policy si ça devient un poste de coût.
 
+### 9.3 Mesurer : Prometheus Operator et Grafana
+
+La passerelle produisait déjà les bonnes métriques — 70 sur `:15020`, dont
+`agentgateway_gen_ai_client_token_usage` — mais personne ne les collectait. Le
+stack `kube-prometheus-stack` (chart 88.5.2) comble ce trou, en périmètre
+délibérément restreint : **seule la passerelle IA est scrapée**. Les
+interrupteurs métriques de Cilium, External Secrets et Argo CD restent éteints.
+
+**Deux objets, deux mécanismes, et ce n'est pas un choix.** Le `ServiceMonitor`
+du control plane cible le port 9092, présent sur son Service. Le data plane, lui,
+n'expose que le port 80 du listener sur son Service `ai` : il n'y a **aucun port
+de métriques à cibler**, d'où le `PodMonitor` qui va chercher le port 15020
+directement sur les pods. Le chart fournit les deux, plus un dashboard Grafana
+de 38 ko déjà labellisé — il suffisait de les activer.
+
+**Le piège qui a coûté le plus de temps, en deux moitiés.** Le dépôt portait un
+bloc `podMonitor.proxy.enabled: false` dans les values agentgateway. Ce chemin
+**n'existe pas** dans le chart v1.4.1 (c'est `monitoring.*`), et Helm ignore
+silencieusement une valeur inconnue : le bloc n'a jamais rien fait. Puis, une
+fois corrigé, Prometheus a démarré avec 12 cibles toutes vertes et **aucune
+n'était la passerelle**. Deux réglages distincts se cachent derrière ce
+comportement :
+
+- `serviceMonitorSelectorNilUsesHelmValues: true` (défaut) restreint la
+  découverte aux objets portant `release: kps` ;
+- `serviceMonitorNamespaceSelector` laissé à nil restreint la découverte au
+  **namespace de Prometheus**, alors que les monitors vivent dans
+  `agentgateway-system`.
+
+Les deux doivent être neutralisés. Le mode de panne est le pire qui soit :
+aucune erreur, tout a l'air sain, il manque simplement l'essentiel. D'où la
+cible `make targets`, qui liste l'état réel des cibles de scrape.
+
+**Ce que kind impose.** `kube-proxy` n'existe pas (Cilium le remplace) ;
+`kube-controller-manager`, `kube-scheduler` et `etcd` écoutent leurs métriques
+sur la loopback du nœud. Ces quatre-là sont désactivés — un `ServiceMonitor` mort
+en permanence est pire qu'absent, parce qu'on apprend à l'ignorer. Alertmanager
+aussi, avec sa source de données Grafana, faute d'avoir quoi que ce soit à
+router dans un lab.
+
+**Le dashboard que le chart ne peut pas fournir.** Les métriques natives ne
+portent aucun label d'identité. `AgentgatewayPolicy.spec.frontend.metrics`
+ajoute des labels calculés en CEL par requête : `user` (depuis
+`jwt.preferred_username` — et non `jwt.sub`, qui est un UUID illisible) et
+`team`. Le tableau de bord *Gouvernance IA* en tire « qui a consommé quoi »,
+« combien tourne en local plutôt qu'en facturé » et « qu'est-ce qui a été
+refusé ».
+
+Deux limites, mesurées plutôt que supposées :
+
+- **Sur un refus, `user` et `team` valent `unknown`** : la requête est rejetée
+  avant que le contexte JWT ne soit disponible pour les labels de métriques. On
+  sait combien de refus et de quel type, pas qui. Attribuer un refus à une
+  personne reste du ressort des access logs, qui portent `jwt.subject`.
+- `agentgateway_gen_ai_server_time_to_first_token` n'est alimentée que par les
+  requêtes **en streaming**. Un appel non-streaming laisse le panneau vide ;
+  Open WebUI streame par défaut, donc l'usage réel le remplit.
+
+Enfin, la cardinalité. Le CRD met en garde, à raison : un label `user` sur un
+annuaire de plusieurs milliers de personnes ferait exploser Prometheus. Ici le
+lab a deux comptes. En production on ne garderait que `team`.
+
 ## 10. Ce qui a été délibérément écarté
 
 ### Rendered Manifests (§6)
@@ -589,7 +651,7 @@ que le bloc `spec.db` du CR.
 
 | Sujet | Piste |
 |---|---|
-| Observabilité | kube-prometheus-stack, puis activer `podMonitor.proxy.enabled` (attention : `namespaceSelector` ne couvre que le namespace de la release) et un collecteur OTel pour `frontend.tracing`. La métrique qui compte : `agentgateway_gen_ai_client_token_usage`. |
+| Traces distribuées | Un collecteur OTel pour `frontend.tracing` (GRPC, port 4317). Les métriques et les access logs sont en place (§9.3) ; il manque le maillon qui relie un appel de bout en bout. |
 | Quota en tokens | `rateLimit.global` avec un service de rate limiting externe, `unit: Tokens`. |
 | Multi-cluster | Un dossier par cluster + `destination.server` distinct. Si la duplication de `platform/` devient pénible : soit un overlay Kustomize d'un `base/platform/`, soit un petit chart Helm d'`Application` — au prix de l'abstraction que le ebook (§6.2) recommande justement d'éviter. |
 | Politiques d'admission | Kyverno ou Gatekeeper pour rendre non contournable ce que les `AppProject` décrivent aujourd'hui par convention. |

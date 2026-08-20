@@ -29,3 +29,13 @@ patches:
     - op: replace
       path: /spec/hostnames/0
       value: hubble.evann-deb.fr
+
+# --- Hostname de Grafana -----------------------------------------------------
+- target:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: grafana
+  patch: |
+    - op: replace
+      path: /spec/hostnames/0
+      value: grafana.evann-deb.fr

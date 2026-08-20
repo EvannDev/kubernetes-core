@@ -15,6 +15,7 @@ KC_HOST        ?= idp.evann-deb.fr
 ARGOCD_HOST    ?= argocd.evann-deb.fr
 HUBBLE_HOST    ?= hubble.evann-deb.fr
 OWUI_HOST      ?= openwebui.evann-deb.fr
+GRAFANA_HOST   ?= grafana.evann-deb.fr
 
 ##@ Général
 # Secrets locaux (jamais commités, cf. .gitignore). `include` n'en fait que des
@@ -39,6 +40,7 @@ validate: ## Rend tous les kustomize build et vérifie que le YAML est valide
 	         clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
 	         clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
 	         clusters/$(CLUSTER)/pangolin \
+	         base/kube-prometheus-stack clusters/$(CLUSTER)/kube-prometheus-stack \
 	         apps/mcp-website-fetcher; do \
 	  printf '%-45s' "kustomize build $$d"; \
 	  kustomize build $$d > /dev/null && echo OK; \
@@ -52,6 +54,7 @@ KUSTOMIZE_DIRS := bootstrap projects \
   clusters/$(CLUSTER)/platform-gateway clusters/$(CLUSTER)/agentgateway \
   clusters/$(CLUSTER)/open-webui clusters/$(CLUSTER)/argocd-mcp \
   clusters/$(CLUSTER)/pangolin \
+  base/kube-prometheus-stack clusters/$(CLUSTER)/kube-prometheus-stack \
   apps/mcp-website-fetcher
 
 validate-crs: ## Valide les CR contre les CRD upstream : schéma ET règles CEL
@@ -113,6 +116,14 @@ seed-secrets: ## 4. Sème les secrets sources du "coffre" (hors GitOps, une seul
 	kubectl -n platform-secrets create secret generic llm-openai \
 	  --from-literal=apiKey="$${OPENAI_API_KEY:-sk-remplacer}" \
 	  --dry-run=client -o yaml | kubectl apply -f -
+	# Grafana : client secret OIDC + compte admin local de secours. Une seule
+	# source dans le coffre, projetée dans keycloak (pour l'import de realm) et
+	# dans monitoring (pour le pod Grafana).
+	kubectl -n platform-secrets create secret generic grafana-oidc \
+	  --from-literal=clientSecret=$$(openssl rand -hex 24) \
+	  --from-literal=adminUser=admin \
+	  --from-literal=adminPassword=$$(openssl rand -hex 16) \
+	  --dry-run=client -o yaml | kubectl apply -f -
 	kubectl -n platform-secrets create secret generic newt-main-tunnel-auth \
 	  --from-literal=PANGOLIN_ENDPOINT="$${PANGOLIN_ENDPOINT}" \
 	  --from-literal=NEWT_ID="$${NEWT_ID}" \
@@ -172,6 +183,7 @@ urls: ## Vérifie la Gateway de plateforme et affiche les URLs
 	@echo "   Keycloak : https://$(KC_HOST)   (alice/alice, bob/bob)"
 	@echo "   Hubble   : https://$(HUBBLE_HOST)"
 	@echo "   Open WebUI : https://$(OWUI_HOST)"
+	@echo "   Grafana  : https://$(GRAFANA_HOST)"
 	@echo
 	@echo ">> Ces URLs sont servies par Pangolin : TLS terminé chez lui, trafic"
 	@echo "   acheminé par le tunnel Newt. Les cibles à déclarer côté Pangolin :"
@@ -181,6 +193,19 @@ urls: ## Vérifie la Gateway de plateforme et affiche les URLs
 	@echo "   C'est sans conséquence, plus rien n'entre par l'hôte."
 	@echo
 	@echo ">> Gateway IA : make port-forward-ai (celle-là est un Deployment normal)"
+
+port-forward-prometheus: ## Expose Prometheus sur localhost:9090 (cibles de scrape, PromQL)
+	kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+
+grafana-password: ## Mot de passe admin local de Grafana (issue de secours si le SSO casse)
+	@kubectl -n monitoring get secret grafana-oidc -o jsonpath='{.data.admin-password}' | base64 -d; echo
+
+targets: ## Etat des cibles de scrape Prometheus (le test qui attrape le piege du selecteur)
+	# Une liste vide = serviceMonitorSelectorNilUsesHelmValues oublie : Prometheus
+	# se declare sain et ne scrape rien, sans lever la moindre erreur.
+	@curl -s http://localhost:9090/api/v1/targets | jq -r \
+	  '.data.activeTargets[] | "\(.health)\t\(.labels.job)\t\(.scrapeUrl)"' | sort || \
+	  echo ">> Lancer d'abord : make port-forward-prometheus"
 
 port-forward-ai: ## Expose la Gateway IA sur localhost:8081 (Deployment classique)
 	kubectl -n agentgateway-system port-forward svc/ai 8081:80
@@ -255,6 +280,7 @@ down: ## Supprime le cluster kind
 
 .PHONY: help validate validate-crs waves kind-up install-gateway-api install-cilium \
         install-argocd seed-secrets bootstrap up adopt-check \
-        status urls port-forward-ai admin-password token demo-mcp \
+        status urls port-forward-ai port-forward-prometheus grafana-password \
+        targets admin-password token demo-mcp \
         demo-mcp-anonymous ollama-models ollama-serve ollama-check \
         demo-llm-local models-catalog down

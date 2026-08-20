@@ -20,6 +20,35 @@ spec:
     name: ai
 
   frontend:
+    # LABELS D'IDENTITÉ SUR LES MÉTRIQUES. Sans ce bloc, les métriques se
+    # découpent par modèle, par provider et par statut — mais jamais par
+    # personne. « Qui a brûlé le budget ? » restait donc une question d'access
+    # logs, alors que c'est une question de tableau de bord.
+    #
+    # Les expressions sont évaluées par requête et ajoutées comme labels à
+    # TOUTES les métriques Prometheus de la passerelle. Même mécanisme et même
+    # syntaxe que le bloc accessLog ci-dessous.
+    #
+    # CARDINALITÉ — le CRD met en garde, et il a raison. Chaque valeur distincte
+    # crée une série temporelle de plus, pour chaque métrique. Ici c'est borné :
+    # deux comptes de démo, deux groupes. En production, `user` sur un annuaire
+    # de plusieurs milliers de personnes ferait exploser Prometheus : on ne
+    # garderait que `team`. Ce réglage ne se recopie pas tel quel.
+    #
+    # `team` est réduit à UNE chaîne plutôt que la liste brute des groupes :
+    # sérialiser une liste produirait un label différent par combinaison.
+    metrics:
+      attributes:
+        add:
+        - name: user
+          # `preferred_username` et non `jwt.sub` : sub est l'UUID Keycloak
+          # (f676468d-3be6-…), illisible sur un tableau de bord. L'access log
+          # ci-dessous garde `sub`, qui reste l'identifiant stable pour l'audit
+          # — un nom d'utilisateur peut être renommé, pas un sub.
+          expression: 'jwt.preferred_username'
+        - name: team
+          expression: 'jwt.groups.exists(g, g == "platform-admins") ? "platform-admins" : "platform-viewers"'
+
     accessLog:
       attributes:
         add:

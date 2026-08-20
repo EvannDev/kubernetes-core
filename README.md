@@ -22,6 +22,7 @@ make urls          # vérifie la Gateway et affiche les URLs
 - Keycloak : <https://idp.evann-deb.fr>
 - Open WebUI : <https://openwebui.evann-deb.fr>
 - Hubble : <https://hubble.evann-deb.fr>
+- Grafana : <https://grafana.evann-deb.fr>
 - Gateway IA : `make port-forward-ai` → `localhost:8081`
 
 Aucun `port-forward` pour les quatre premières : elles sont publiées par
@@ -146,6 +147,30 @@ Le prompt n'est ni dans Open WebUI, ni dans `opencode.jsonc` : il est dans Git,
 revu en pull request, et la passerelle l'ajoute avant le message du client.
 Détails et limites mesurées dans `ARCHITECTURE.md` §9.2.
 
+### Démo : la gouvernance devient un graphe
+
+Grafana sur <https://grafana.evann-deb.fr>, en SSO Keycloak — `alice` arrive en
+`Admin`, `bob` en `Viewer`, par mapping du claim `groups`.
+
+Deux tableaux de bord. Celui livré par le chart agentgateway (tokens, coût USD,
+latence, outils MCP), et **AgentGateway — Gouvernance IA**, qui répond à ce
+qu'aucune application ne sait documenter seule : qui a consommé quoi, combien
+tourne en local plutôt qu'en facturé, et qu'est-ce que la passerelle a refusé.
+
+Ce dernier n'existe que parce que la policy `ai-observability` ajoute des labels
+d'identité aux métriques (`user`, `team`) — les métriques natives d'agentgateway
+n'en portent aucun.
+
+```bash
+make port-forward-prometheus   # Prometheus sur localhost:9090
+make targets                   # etat reel des cibles de scrape
+make grafana-password          # compte admin local, si le SSO casse
+```
+
+`make targets` n'est pas décoratif : le mode de panne classique de cette stack
+est un Prometheus qui se déclare sain et ne scrape rien. Détails et limites
+mesurées dans `ARCHITECTURE.md` §9.3.
+
 ### Démo : un agent de code réellement gouverné
 
 `opencode.jsonc` à la racine configure [opencode](https://opencode.ai) pour que
@@ -267,6 +292,8 @@ L'ordre n'est pas cosmétique : c'est ce qui rend le bootstrap reproductible.
 | Argo CD (chart) | `10.3.0` | `argoproj.github.io/argo-helm` |
 | Keycloak (opérateur) | `26.7.1` | `github.com/keycloak/keycloak-k8s-resources` — `kubernetes` |
 | AgentGateway | `v1.4.1` | `cr.agentgateway.dev/charts` (OCI) |
+| kube-prometheus-stack | `88.5.2` | `prometheus-community.github.io/helm-charts` |
+| Prometheus Operator CRD | `31.0.1` (appVersion `v0.93.1`) | `prometheus-community.github.io/helm-charts` |
 
 Rien n'est en `latest`, ni en `stable`, ni en `main`. Un `git log` doit suffire à
 expliquer pourquoi le cluster a changé.

@@ -35,6 +35,10 @@ GW = "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/confi
 KC = "https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.1/kubernetes"
 AG = "https://raw.githubusercontent.com/agentgateway/agentgateway/v1.4.1/controller/install/helm/agentgateway-crds/templates"
 AR = "https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.0/manifests/crds"
+# Prometheus Operator. La version DOIT rester alignée sur le chart
+# prometheus-operator-crds (31.0.1 -> appVersion v0.93.1) de
+# clusters/<cluster>/platform/05-prometheus-operator-crds.yaml.
+PO = "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.93.1/example/prometheus-operator-crd"
 
 SOURCES = [
     f"{GW}/gateway.networking.k8s.io_gateways.yaml",
@@ -51,6 +55,9 @@ SOURCES = [
     f"{AR}/applicationset-crd.yaml",
     f"{AR}/appproject-crd.yaml",
     "https://raw.githubusercontent.com/external-secrets/external-secrets/v2.8.0/deploy/crds/bundle.yaml",
+    f"{PO}/monitoring.coreos.com_servicemonitors.yaml",
+    f"{PO}/monitoring.coreos.com_podmonitors.yaml",
+    f"{PO}/monitoring.coreos.com_prometheusrules.yaml",
 ]
 
 

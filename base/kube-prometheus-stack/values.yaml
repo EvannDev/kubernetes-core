@@ -1,0 +1,141 @@
+# Valeurs kube-prometheus-stack COMMUNES.
+# Tout ce qui dépend d'un domaine public va dans
+# clusters/<cluster>/values/kube-prometheus-stack.yaml, appliqué APRÈS.
+
+# Les CRD viennent de l'Application prometheus-operator-crds (wave -18), pas
+# d'ici. Le chart est en wave 48 : beaucoup trop tard pour l'app agentgateway
+# (wave 25), qui émet un ServiceMonitor et un PodMonitor et échouerait si les
+# CRD n'existaient pas encore.
+crds:
+  enabled: false
+
+# ── CE QUI EST ÉTEINT, ET POURQUOI ──────────────────────────────────────────
+# Chacun de ces blocs produirait sinon une cible de scrape morte, en rouge dans
+# l'interface, qu'on finit par apprendre à ignorer — le pire état pour de
+# l'observabilité.
+
+# Rien à router dans un lab, et c'est le composant le plus gourmand du stack.
+alertmanager:
+  enabled: false
+
+# kube-proxy N'EXISTE PAS sur ce cluster : Cilium tourne en
+# kubeProxyReplacement et kind est créé avec kubeProxyMode: none.
+kubeProxy:
+  enabled: false
+
+# Ces trois-là écoutent leurs métriques sur la loopback du nœud
+# (--bind-address=127.0.0.1, --listen-metrics-urls=http://127.0.0.1:2381),
+# donc injoignables depuis un pod. Corriger cela demanderait des
+# kubeadmConfigPatches dans kind-cluster.yaml, qui ne se modifient pas à chaud :
+# il faudrait détruire et recréer le cluster. Le jeu n'en vaut pas la chandelle
+# pour une démo de gouvernance IA.
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    # Un lab n'a pas besoin de plus, et le PVC vit sur le disque du nœud kind.
+    retention: 3d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1500Mi
+
+    # LE RÉGLAGE QUI DÉCIDE DE TOUT. Par défaut le chart pose
+    # serviceMonitorSelectorNilUsesHelmValues: true, ce qui restreint la
+    # découverte aux objets portant `release: kps`. Le ServiceMonitor et le
+    # PodMonitor produits par le chart agentgateway ne portent pas ce label :
+    # sans ces deux lignes, Prometheus démarre, se déclare sain, et ne scrape
+    # RIEN. Aucune erreur nulle part — le pire mode de panne qui soit.
+    #
+    # L'alternative stricte serait de poser `release: kps` en extraLabels côté
+    # agentgateway. Écartée : elle oblige chaque composant à connaître le nom de
+    # la release du stack de monitoring.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    # DEUXIÈME MOITIÉ DU MÊME PIÈGE, et elle se rate encore plus facilement.
+    # Les trois lignes ci-dessus règlent le sélecteur de LABELS. Le sélecteur de
+    # NAMESPACES est un réglage distinct qui, laissé à nil, limite la découverte
+    # au namespace de Prometheus lui-même. Or le ServiceMonitor et le PodMonitor
+    # d'agentgateway vivent dans agentgateway-system.
+    #
+    # Vérifié sur le cluster : avec les labels corrigés mais pas les namespaces,
+    # Prometheus affiche 12 cibles toutes vertes — et pas une seule d'entre
+    # elles n'est la passerelle. Tout a l'air parfait, il manque l'essentiel.
+    #
+    # Un objet vide signifie « tous les namespaces ».
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleNamespaceSelector: {}
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          # kind fournit local-path sous le nom "standard", en
+          # WaitForFirstConsumer.
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  # Le compte admin local reste l'issue de secours quand le SSO casse — la même
+  # logique que `make admin-password` pour Argo CD.
+  admin:
+    existingSecret: grafana-oidc
+    userKey: admin-user
+    passwordKey: admin-password
+
+  # Le client secret OIDC n'entre jamais dans grafana.ini : il est injecté en
+  # variable d'environnement depuis le Secret projeté par ESO. Grafana lit
+  # GF_<SECTION>_<CLÉ> et écrase la valeur du fichier.
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef:
+        name: grafana-oidc
+        key: clientSecret
+
+  # Le sidecar cherche les ConfigMap labellisés grafana_dashboard: "1" dans TOUS
+  # les namespaces (searchNamespace: ALL par défaut). C'est ce qui fait remonter
+  # tout seul le dashboard livré par le chart agentgateway, qui vit dans
+  # agentgateway-system.
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      # Alertmanager étant désactivé plus haut, sa source de données pointerait
+      # vers un Service inexistant : une entrée rouge dans Grafana, qu'on
+      # apprend à ignorer. On la retire.
+      alertmanager:
+        enabled: false
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# Node exporter et kube-state-metrics restent actifs : ce sont eux qui
+# alimentent les dashboards Kubernetes livrés par le chart, et ils coûtent peu.
+nodeExporter:
+  enabled: true
+kubeStateMetrics:
+  enabled: true
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi

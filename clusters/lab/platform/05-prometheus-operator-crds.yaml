@@ -1,0 +1,48 @@
+# CRD Prometheus Operator : ServiceMonitor, PodMonitor, Prometheus,
+# PrometheusRule, Alertmanager… (groupe monitoring.coreos.com).
+#
+# POURQUOI UNE APPLICATION SÉPARÉE, ET EN WAVE NÉGATIVE. Le chart
+# kube-prometheus-stack sait poser ses propres CRD, mais il est en wave 48 —
+# beaucoup trop tard. Dès que `monitoring.enabled: true` est posé sur
+# agentgateway (wave 25), son chart émet un ServiceMonitor et un PodMonitor : si
+# les CRD n'existent pas encore, la synchronisation de la wave 25 échoue.
+# D'où cette Application isolée, avant tout le reste, exactement comme
+# 00-gateway-api (wave -20) et 50-agentgateway-crds.
+#
+# La version du chart suit l'opérateur embarqué par kube-prometheus-stack 88.5.2
+# (appVersion v0.93.1). Les deux DOIVENT rester alignées.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-operator-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-18"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: observability
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-operator-crds
+    targetRevision: 31.0.1
+    helm:
+      releaseName: prometheus-operator-crds
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: false      # on ne supprime jamais des CRD partagées
+      selfHeal: true
+    syncOptions:
+    # Les CRD monitoring.coreos.com dépassent la limite de 262 kB du
+    # client-side apply (Prometheus et Alertmanager sont énormes).
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

@@ -1,0 +1,49 @@
+# Delta du cluster "lab" pour kube-prometheus-stack.
+#
+# Tout ce qui est ici dépend du domaine public servi par Pangolin. Le reste est
+# dans base/kube-prometheus-stack/values.yaml.
+grafana:
+  grafana.ini:
+    server:
+      # OBLIGATOIRE derrière une Gateway. Sans root_url, Grafana construit ses
+      # URL de redirection OAuth à partir de son nom de Service interne et le
+      # retour de Keycloak échoue sur une adresse injoignable.
+      root_url: https://grafana.evann-deb.fr
+      domain: grafana.evann-deb.fr
+
+    auth:
+      # On veut le SSO, pas un formulaire de plus. Le compte admin local reste
+      # accessible en repli via /login (disable_login_form: false).
+      oauth_auto_login: false
+    auth.anonymous:
+      enabled: false
+
+    auth.generic_oauth:
+      enabled: true
+      name: Keycloak
+      client_id: grafana
+      # client_secret vient de la variable d'environnement
+      # GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET, injectée depuis le Secret projeté
+      # par ESO (cf. base/kube-prometheus-stack/values.yaml, envValueFrom).
+      scopes: openid profile email groups
+      auth_url: https://idp.evann-deb.fr/realms/platform/protocol/openid-connect/auth
+      token_url: https://idp.evann-deb.fr/realms/platform/protocol/openid-connect/token
+      api_url: https://idp.evann-deb.fr/realms/platform/protocol/openid-connect/userinfo
+      # Le claim `groups` est produit par le mapper oidc-group-membership-mapper
+      # du client scope `groups`, déjà déclaré dans le realm.
+      #
+      # Forme du claim VÉRIFIÉE en décodant un vrai token de ce realm :
+      # groups = ["platform-admins"], sans slash de tête. (Le mapper Keycloak
+      # peut préfixer les groupes d'un "/" quand full.path est activé — ce
+      # n'est pas le cas ici, mais c'est la cause classique d'un SSO qui
+      # connecte tout le monde en Viewer.)
+      #
+      # Les parenthèses ne sont pas décoratives : en JMESPath `&&` lie plus fort
+      # que `||`. Sans elles, `a || b && 'Admin' || 'Viewer'` renvoie `true`
+      # (un booléen) au lieu de la chaîne "Admin", et le mapping échoue en
+      # silence.
+      role_attribute_path: "(contains(groups[*], 'platform-admins')) && 'Admin' || 'Viewer'"
+      # Un utilisateur sans groupe connu obtient Viewer plutôt qu'un refus :
+      # en lab on préfère qu'il voie les dashboards.
+      role_attribute_strict: false
+      allow_assign_grafana_admin: false

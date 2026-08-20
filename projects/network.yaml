@@ -36,6 +36,10 @@ spec:
     namespace: cilium-secrets
   - server: https://kubernetes.default.svc
     namespace: pangolin
+  # HTTPRoute de Grafana : elle vit avec son Service (namespace monitoring),
+  # mais c'est l'app platform-gateway — donc ce projet — qui la déploie.
+  - server: https://kubernetes.default.svc
+    namespace: monitoring
 
   clusterResourceWhitelist:
   - group: ""

@@ -1,0 +1,56 @@
+# Prometheus Operator + Prometheus + Grafana.
+#
+# Wave 49 : après son doublet de configuration (48) et après Pangolin (47), donc
+# tout à la fin. Rien ne dépend de ce stack pour démarrer — c'est lui qui
+# observe les autres, pas l'inverse.
+#
+# ATTENTION AU DÉCOUPAGE. Les CRD monitoring.coreos.com ne viennent PAS d'ici
+# (crds.enabled: false dans les values) mais de l'Application
+# prometheus-operator-crds en wave -18. C'est indispensable : le chart
+# agentgateway est en wave 25 et émet un ServiceMonitor et un PodMonitor. Si les
+# CRD n'arrivaient qu'en wave 49, la wave 25 échouerait à chaque `make up`.
+#
+# releaseName `kps` : le nom se retrouve dans tous les Services, dont
+# `kps-grafana` que cible la HTTPRoute (base/platform-gateway/httproute-grafana.yaml).
+# Le changer casse la route.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "49"
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: observability
+  sources:
+  - repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 88.5.2
+    helm:
+      releaseName: kps
+      # Les CRD sont posées par l'Application dédiée en wave -18.
+      skipCrds: true
+      valueFiles:
+      - $values/base/kube-prometheus-stack/values.yaml
+      - $values/clusters/lab/values/kube-prometheus-stack.yaml
+  - repoURL: https://github.com/EvannDev/kubernetes-core.git
+    targetRevision: main
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

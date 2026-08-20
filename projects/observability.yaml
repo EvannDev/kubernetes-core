@@ -1,0 +1,45 @@
+# observability : Prometheus Operator et Grafana.
+#
+# Projet distinct plutôt qu'un ajout à `ui` : le stack pose des CRD, des
+# ClusterRole et des webhooks d'admission, alors que `ui` n'autorise que la
+# création de Namespace. Élargir `ui` reviendrait à donner à Open WebUI le droit
+# de poser des CRD — exactement la frontière que les AppProjects servent à
+# tenir.
+#
+# La whitelist ci-dessous est calquée sur celle de network.yaml, la seule assez
+# large pour un opérateur.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+spec:
+  description: Prometheus Operator et Grafana
+
+  sourceRepos:
+  - https://github.com/EvannDev/kubernetes-core.git
+  - https://prometheus-community.github.io/helm-charts
+
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

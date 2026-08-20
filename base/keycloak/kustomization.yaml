@@ -7,6 +7,7 @@ resources:
 - namespace.yaml
 - postgres.yaml
 - externalsecret-openwebui.yaml
+- externalsecret-grafana.yaml
 - keycloak.yaml
 - realm-platform.yaml
 - httproute.yaml

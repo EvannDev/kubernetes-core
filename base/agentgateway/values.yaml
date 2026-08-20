@@ -10,15 +10,39 @@ controllerName: ""
 controller:
   logLevel: info
 
-# Le chart embarque un PodMonitor pour scraper les pods du data plane
-# (port 15020). A activer avec kube-prometheus-stack.
-# Attention : namespaceSelector vaut par défaut le namespace de la release —
-# si des Gateway vivent ailleurs, il faut l'élargir.
-podMonitor:
+# OBSERVABILITÉ. Attention au chemin : la clé racine est `monitoring`, PAS
+# `podMonitor`. Le dépôt a longtemps porté un bloc `podMonitor.proxy.enabled`
+# qui n'existe nulle part dans le chart v1.4.1 — Helm ignore silencieusement une
+# valeur inconnue, donc rien n'a jamais été scrapé et rien ne l'a signalé.
+#
+# `enabled: true` EXIGE les CRD monitoring.coreos.com. Elles sont posées par
+# l'Application prometheus-operator-crds en wave -18, très en amont de la wave
+# 25 de ce chart : sans elles, cette synchronisation échoue.
+#
+# Ce qui est produit :
+#   serviceMonitor      -> control plane, port 9092 (nommé `metrics` sur le Service)
+#   proxy.podMonitor    -> data plane, port 15020. Un PodMonitor et non un
+#                          ServiceMonitor parce que le Service `ai` généré par le
+#                          contrôleur n'expose QUE le port 80 du listener : il n'y
+#                          a aucun port de métriques à cibler.
+#   grafanaDashboard    -> ConfigMap déjà labellisé grafana_dashboard: "1", donc
+#                          ramassé tel quel par le sidecar de Grafana.
+#
+# Attention : le namespaceSelector du PodMonitor vaut par défaut le namespace de
+# la release. Sans effet ici — la release ET la Gateway `ai` vivent toutes deux
+# dans agentgateway-system — mais à élargir si une Gateway naît ailleurs.
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
   proxy:
-    enabled: false
+    podMonitor:
+      enabled: true
     gatewayClassNames:
     - agentgateway
+  grafanaDashboard:
+    enabled: true
 
 # API AgentgatewayModel : expérimentale, désactivée par défaut
 # (AGW_ENABLE_AGENTGATEWAY_MODELS=false). C'est elle qui permet de déclarer un
