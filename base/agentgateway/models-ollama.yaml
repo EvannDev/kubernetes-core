@@ -63,20 +63,3 @@ spec:
   # Pas de policies.authorization non plus : model_authorized() renvoie true
   # quand aucune règle n'est déclarée. L'authentification, elle, reste exigée
   # par la policy `ai-authn` posée sur la Gateway.
----
-# ── Le modèle de repli, quand seule la latence compte ────────────────────────
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayModel
-metadata:
-  name: llama3-2-3b
-  namespace: agentgateway-system
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: ai
-    sectionName: http
-  match:
-    model: "llama3.2:3b"
-  provider: Ollama
-  baseURL: http://host.docker.internal:11434
