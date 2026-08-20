@@ -213,7 +213,7 @@ demo-mcp-anonymous: ## Le même appel sans token : doit être refusé
 # host.docker.internal — rien à publier, aucun extraPortMappings à remettre.
 # Le catalogue correspondant est dans base/agentgateway/models-ollama.yaml.
 
-OLLAMA_MODELS ?= llama3.2:3b qwen2.5-coder:32b
+OLLAMA_MODELS ?= qwen3:8b llama3.2:3b
 
 ollama-models: ## Tire les modèles locaux servis par la Gateway IA
 	@for m in $(OLLAMA_MODELS); do echo ">> ollama pull $$m"; ollama pull "$$m"; done

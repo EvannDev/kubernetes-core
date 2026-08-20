@@ -83,7 +83,7 @@ et l'accélération Metal n'existe que côté hôte. La passerelle le joint par
 publier et aucun `extraPortMappings` à remettre dans `kind-cluster.yaml`.
 
 ```bash
-make ollama-models          # tire llama3.2:3b et qwen2.5-coder:32b
+make ollama-models          # tire qwen3:8b et llama3.2:3b
 make ollama-serve           # OLLAMA_HOST=0.0.0.0, bloquant, dans un terminal à part
 make ollama-check           # joignabilité DEPUIS le cluster : le seul test qui compte
 ```

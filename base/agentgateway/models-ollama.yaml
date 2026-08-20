@@ -13,8 +13,21 @@
 # Prérequis côté hôte : Ollama doit écouter hors loopback (OLLAMA_HOST=0.0.0.0),
 # sinon aucun conteneur ne peut le joindre. Voir `make ollama-serve`.
 #
-# CE QUE ÇA AJOUTE À LA DÉMONSTRATION. Le contraste devient explicite dans le
-# menu déroulant d'Open WebUI : les modèles OpenAI sont facturés et réservés à
+# CE QUI DICTE LE CHOIX DES MODÈLES. Sur ce Mac (M3 Pro, 36 Go unifiés), la
+# mémoire est PARTAGÉE avec la VM Docker Desktop qui fait tourner kind. Mesures
+# faites sur la machine, kind en marche :
+#
+#   modèle              poids    résident   génération   verdict
+#   llama3.2:3b         2,0 Go    6,0 Go     56 tok/s    instantané
+#   qwen3:8b            5,2 Go    ~9 Go      ~25 tok/s   le bon compromis
+#   qwen2.5-coder:32b    19 Go     28 Go    6,4 tok/s    12 Go de SWAP
+#
+# Le 32b tient techniquement en mémoire unifiée, mais il pousse la machine en
+# swap dès que Docker tourne : il est volontairement HORS de ce catalogue. Le
+# plafond utile est autour de 9-10 Go de poids tant que kind est démarré.
+#
+# CE QUE ÇA AJOUTE À LA DÉMONSTRATION. Le contraste devient lisible dans le menu
+# déroulant d'Open WebUI : les modèles OpenAI sont facturés et réservés à
 # `platform-admins`, les modèles locaux ne coûtent rien et sont ouverts à tout
 # porteur d'un JWT valide. La règle se pose PAR MODÈLE, indépendamment du
 # fournisseur — c'est tout l'intérêt d'avoir un modèle = une ressource.
@@ -23,10 +36,12 @@
 # ni l'installer ni le réconcilier. Si `ollama serve` n'est pas lancé, les
 # modèles restent listés dans /v1/models mais toute inférence échoue.
 ---
+# ── Le modèle de travail : assez bon pour les outils MCP, assez rapide pour
+#    ne pas casser le rythme d'une démo ────────────────────────────────────────
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
-  name: qwen2-5-coder-32b
+  name: qwen3-8b
   namespace: agentgateway-system
 spec:
   parentRefs:
@@ -38,7 +53,7 @@ spec:
   # dissocie donc les deux : le nom de ressource reste DNS-safe, et match.model
   # porte le tag exact — c'est cette chaîne que la passerelle présente en amont.
   match:
-    model: "qwen2.5-coder:32b"
+    model: "qwen3:8b"
   provider: Ollama
   # Obligatoire : le CRD porte la règle CEL « ollama requires baseURL ». Il
   # refuserait aussi localhost, 127.0.0.0/8, 169.254.0.0/16 et ::1 — un nom
@@ -49,6 +64,7 @@ spec:
   # quand aucune règle n'est déclarée. L'authentification, elle, reste exigée
   # par la policy `ai-authn` posée sur la Gateway.
 ---
+# ── Le modèle de repli, quand seule la latence compte ────────────────────────
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
