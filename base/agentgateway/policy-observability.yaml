@@ -31,12 +31,23 @@ spec:
     #
     # CARDINALITÉ — le CRD met en garde, et il a raison. Chaque valeur distincte
     # crée une série temporelle de plus, pour chaque métrique. Ici c'est borné :
-    # deux comptes de démo, deux groupes. En production, `user` sur un annuaire
-    # de plusieurs milliers de personnes ferait exploser Prometheus : on ne
-    # garderait que `team`. Ce réglage ne se recopie pas tel quel.
+    # deux comptes de démo, trois valeurs possibles de `team`. En production,
+    # `user` sur un annuaire de plusieurs milliers de personnes ferait exploser
+    # Prometheus : on ne garderait que `team`. Ce réglage ne se recopie pas tel
+    # quel.
     #
     # `team` est réduit à UNE chaîne plutôt que la liste brute des groupes :
     # sérialiser une liste produirait un label différent par combinaison.
+    #
+    # CE QUE `unknown` VEUT DIRE. Un attribut dont l'expression ÉCHOUE est
+    # silencieusement abandonné, et le label retombe sur `unknown`. Trois cas
+    # produisent cette valeur, et un seul est un vrai trou d'attribution :
+    #   - GET /v1/models  -> servi par le routeur interne, les attributs ne sont
+    #                        pas évalués du tout. Structurel, aucune policy n'y
+    #                        changera quoi que ce soit.
+    #   - 401             -> pas de JWT validé, donc pas de `jwt`. Correct.
+    #   - 429             -> les attributs SONT évalués (`user` est renseigné) :
+    #                        ce n'est pas une perte d'attribution.
     metrics:
       attributes:
         add:
@@ -47,7 +58,24 @@ spec:
           # — un nom d'utilisateur peut être renommé, pas un sub.
           expression: 'jwt.preferred_username'
         - name: team
-          expression: 'jwt.groups.exists(g, g == "platform-admins") ? "platform-admins" : "platform-viewers"'
+          # has() est la forme documentée pour tester la présence d'un claim :
+          # depuis la v0.11, `jwt` n'est plus « toujours présent mais null », un
+          # claim absent fait ÉCHOUER l'expression entière — y compris le
+          # ternaire, dont la branche « faux » ne sera jamais atteinte.
+          #
+          # TROIS valeurs et non deux. `sans-groupe` désigne un jeton valide qui
+          # ne porte pas le claim `groups` : typiquement une session SSO ouverte
+          # AVANT l'affectation au groupe. Open WebUI retransmet le jeton stocké
+          # à l'ouverture de session (auth_type: system_oauth) et ne le
+          # rafraîchit pas ; le groupe ajouté après coup n'y figure jamais.
+          # Replier ce cas sur `platform-viewers` compterait une session périmée
+          # comme un viewer légitime — sur un tableau de bord de gouvernance,
+          # c'est un mensonge. Mieux vaut que le trou se voie.
+          expression: >-
+            has(jwt.groups)
+            ? (jwt.groups.exists(g, g == "platform-admins")
+            ? "platform-admins" : "platform-viewers")
+            : "sans-groupe"
 
     accessLog:
       attributes:
@@ -55,6 +83,10 @@ spec:
         - name: jwt.subject
           expression: 'jwt.sub'
         - name: jwt.groups
-          expression: 'jwt.groups'
+          # Même garde que ci-dessus, pour la même raison : sans has(), le champ
+          # DISPARAÎT purement et simplement de la ligne de log quand le claim
+          # manque. Un champ absent ne se remarque pas ; une valeur explicite,
+          # si.
+          expression: 'has(jwt.groups) ? jwt.groups : "sans-groupe"'
         - name: http.route
           expression: 'request.path'

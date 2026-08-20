@@ -316,6 +316,13 @@ Ils sont documentés en commentaire à l'endroit exact où ils s'appliquent.
   faut l'écraser pour un lab en HTTP, sinon la redirection OIDC casse.
 - **`KeycloakRealmImport` ne met jamais à jour un realm existant.** Éditer le
   realm dans Git et synchroniser est un no-op.
+- **Un changement de groupe dans Keycloak n'atteint pas une session déjà
+  ouverte.** Open WebUI retransmet le jeton obtenu à l'ouverture de session
+  (`auth_type: system_oauth`) et ne le rafraîchit pas ; `accessTokenLifespan`
+  vaut une heure. Un groupe ajouté après coup n'est donc dans aucun jeton en
+  circulation : le label `team` des métriques tombe à `sans-groupe` et les
+  modèles réservés restent invisibles pour la personne concernée. Le remède est
+  une déconnexion/reconnexion — **à faire avant la démo, pas pendant.**
 - **Les GatewayClass ne sont pas dans Git** : les contrôleurs Cilium et
   AgentGateway les créent et les possèdent. Les déclarer provoquerait une boucle
   `prune` / `selfHeal`.

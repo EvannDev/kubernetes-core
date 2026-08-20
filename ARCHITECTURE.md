@@ -571,13 +571,34 @@ refusé ».
 
 Deux limites, mesurées plutôt que supposées :
 
-- **Sur un refus, `user` et `team` valent `unknown`** : la requête est rejetée
-  avant que le contexte JWT ne soit disponible pour les labels de métriques. On
-  sait combien de refus et de quel type, pas qui. Attribuer un refus à une
-  personne reste du ressort des access logs, qui portent `jwt.subject`.
+- **Un attribut dont l'expression échoue est silencieusement abandonné**, et le
+  label retombe sur `unknown`. C'est le mode de panne le plus coûteux du lot,
+  parce que `unknown` ne distingue pas « expression cassée » de « donnée
+  absente ». Le tableau ci-dessous dit lequel est lequel.
 - `agentgateway_gen_ai_server_time_to_first_token` n'est alimentée que par les
   requêtes **en streaming**. Un appel non-streaming laisse le panneau vide ;
   Open WebUI streame par défaut, donc l'usage réel le remplit.
+
+**Ce que valent réellement les labels, cas par cas.** Relevé sur le cluster, pas
+déduit :
+
+| Ce qu'on observe | Cause | Correct ? |
+|---|---|---|
+| `team="sans-groupe"` | jeton valide, claim `groups` absent | oui — la session est à réémettre, pas la policy |
+| `user`/`team="unknown"` sur `GET /v1/models` | servi par le routeur interne, les attributs ne sont pas évalués | structurel, aucune policy n'y changera rien |
+| `user`/`team="unknown"` sur 401 | pas de JWT validé, donc pas de `jwt` | oui |
+| `user` renseigné sur 429 | les attributs sont évalués après l'authentification | **pas** une perte d'attribution |
+
+Le premier cas est le seul qui trompe. Un claim `groups` absent faisait échouer
+le ternaire de `team` en entier — sa branche « faux » n'était jamais atteinte, ce
+qui donnait `unknown` là où on attendait `platform-viewers`, et laissait croire à
+une expression cassée. La cause était ailleurs : **Open WebUI retransmet le jeton
+stocké à l'ouverture de session** (`auth_type: system_oauth`) et ne le rafraîchit
+pas. Un groupe ajouté dans Keycloak après l'ouverture de session n'atteint donc
+jamais la passerelle. `has(jwt.groups)` garde désormais l'expression et rend le
+cas visible sous son propre nom ; le remède, lui, est une reconnexion. Même
+mécanisme pour l'autorisation par modèle, qui lit le même claim : tant que le
+jeton est périmé, un admin ne voit pas les modèles réservés.
 
 Enfin, la cardinalité. Le CRD met en garde, à raison : un label `user` sur un
 annuaire de plusieurs milliers de personnes ferait exploser Prometheus. Ici le
